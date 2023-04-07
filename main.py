@@ -337,8 +337,8 @@ class RobotControlClass:
             self.leftWheelPos = self.leftWheelPosSensor.getValue()
             self.rightWheelPos = self.rightWheelPosSensor.getValue()
         else:
-            self.left_wheel.setVelocity(self.max_velocity)
-            self.right_wheel.setVelocity(self.max_velocity)
+            self.left_wheel.setVelocity(self.max_velocity - 3)
+            self.right_wheel.setVelocity(self.max_velocity - 3)
             self.left_wheel.setPosition(self.leftWheelPos + 4.42 / 2)
             self.right_wheel.setPosition(self.rightWheelPos - 4.42 / 2)
 
@@ -355,8 +355,8 @@ class RobotControlClass:
             self.leftWheelPos = self.leftWheelPosSensor.getValue()
             self.rightWheelPos = self.rightWheelPosSensor.getValue()
         else:
-            self.left_wheel.setVelocity(self.max_velocity)
-            self.right_wheel.setVelocity(self.max_velocity)
+            self.left_wheel.setVelocity(self.max_velocity - 3)
+            self.right_wheel.setVelocity(self.max_velocity - 3)
             self.left_wheel.setPosition(self.leftWheelPos - 4.42 / 2)
             self.right_wheel.setPosition(self.rightWheelPos + 4.42 / 2)
 
@@ -373,8 +373,8 @@ class RobotControlClass:
             self.leftWheelPos = self.leftWheelPosSensor.getValue()
             self.rightWheelPos = self.rightWheelPosSensor.getValue()
         else:
-            self.left_wheel.setVelocity(self.max_velocity)
-            self.right_wheel.setVelocity(self.max_velocity)
+            self.left_wheel.setVelocity(self.max_velocity - 4)
+            self.right_wheel.setVelocity(self.max_velocity - 4)
             self.left_wheel.setPosition(self.leftWheelPos + 4.42)
             self.right_wheel.setPosition(self.rightWheelPos - 4.42)
 
@@ -394,10 +394,10 @@ class RobotControlClass:
     def stop(self):
         self.stopCounter += 1
 
-        if self.stopCounter >= 50 - 2:
+        if self.stopCounter >= 100 - 10:
             self.stopFlag = True
 
-        if self.stopCounter >= 50:
+        if self.stopCounter >= 100:
             self.stopCounter = 0
             self.state = MoveState.forward
             print("Sending victim done!")
@@ -413,6 +413,7 @@ class StatusClass:
         self.right_status = AroundStatus.is_empty
         self.front_status = AroundStatus.is_empty
         self.behind_status = AroundStatus.is_empty
+        print("Here")
         self.s1: DistanceSensor = robot.getDevice("ds0")
         self.s2: DistanceSensor = robot.getDevice("ds1")
         self.s3: DistanceSensor = robot.getDevice("ds2")
@@ -428,16 +429,20 @@ class StatusClass:
 
     def update_status(self):
 
-        print(f"S6: {self.s6.getValue()}, S5: {self.s5.getValue()}")
-        if self.s1.getValue() > 0.1 or self.s5.getValue() > 0.08 or self.s6.getValue() > 0.08:
+        if self.s1.getValue() > 0.08 and self.s5.getValue() > 0.03 and self.s6.getValue() > 0.03\
+                and baby_cam.get_color() != GameColors.black:
             if baby_location.is_tile_seen(baby_location.NextPosForward):
                 self.front_status = AroundStatus.is_seen
+                print("1")
+
             else:
                 self.front_status = AroundStatus.is_empty
+                print("2")
         else:
             self.front_status = AroundStatus.is_wall
+            print("3")
 
-        if self.s2.getValue() > 0.12:
+        if self.s2.getValue() > 0.09:
             if baby_location.is_tile_seen(baby_location.NextPosRight):
                 self.right_status = AroundStatus.is_seen
             else:
@@ -445,7 +450,7 @@ class StatusClass:
         else:
             self.right_status = AroundStatus.is_wall
 
-        if self.s4.getValue() > 0.12:
+        if self.s4.getValue() > 0.09:
             if baby_location.is_tile_seen(baby_location.NextPosLeft):
                 self.left_status = AroundStatus.is_seen
             else:
@@ -453,13 +458,15 @@ class StatusClass:
         else:
             self.left_status = AroundStatus.is_wall
 
-        if self.s3.getValue() > 0.12:
+        if self.s3.getValue() > 0.09:
             if baby_location.is_tile_seen(baby_location.NextPosBackward):
                 self.behind_status = AroundStatus.is_seen
             else:
                 self.behind_status = AroundStatus.is_empty
         else:
             self.behind_status = AroundStatus.is_wall
+
+        print(f"S1:{self.s1.getValue()} , S6: {self.s6.getValue()}, S5: {self.s5.getValue()}, Forward status : {self.front_status}")
 
 
 class ReturnPath:
@@ -570,7 +577,7 @@ class AIPlannerClass:
         if baby_controller.state != MoveState.forward or baby_location.direction == Direction.not_initialized:
             return
 
-        if baby_location.stuckCounter > 40:
+        if baby_location.stuckCounter > 30:
 
             if baby_status.s3.getValue() < 0.2 or baby_status.s5.getValue() < 0.2:
                 print("Stuck! Turning right")
@@ -624,7 +631,7 @@ class AIPlannerClass:
         pass
 
     def return_start_tile(self):
-        print("in return section")
+        print("in return section *************************************************************** ")
         best_path = baby_finder.get_best_path(baby_location.tilePosX, baby_location.tilePosY)
 
         if baby_location.tilePosX == baby_location.startingTilePos[0] and baby_location.tilePosY == \
@@ -791,6 +798,8 @@ class CameraClass:
             if 160 <= color <= 170 and per > .30:
                 tasvir_shart2 = True
 
+            print(f"Color: {color}, Per: {per}")
+
         if harf_shart1 and harf_shart2:
             return VictimTypes.victim
 
@@ -829,7 +838,7 @@ class CameraClass:
         img1 = np.array([img1 / 255.0])
         img2 = np.array([img2 / 250.0])
 
-        if type_left == VictimTypes.victim:
+        if type_left == VictimTypes.victim and baby_status.s4.getValue() < 0.1:
 
             if baby_controller.stopCounter == 0:
                 baby_controller.dont_move()
@@ -838,7 +847,7 @@ class CameraClass:
                 baby_planner.send_victim(self.hsu_type[np.argmax(self.hsu_model.predict(img1)[0])])
                 self.victim_positions.append((baby_location.tilePosX, baby_location.tilePosY))
 
-        if type_right == VictimTypes.victim:
+        if type_right == VictimTypes.victim and baby_status.s2.getValue() < 0.1:
 
             if baby_controller.stopCounter == 0:
                 baby_controller.dont_move()
@@ -847,7 +856,7 @@ class CameraClass:
                 baby_planner.send_victim(self.hsu_type[np.argmax(self.hsu_model.predict(img2)[0])])
                 self.victim_positions.append((baby_location.tilePosX, baby_location.tilePosY))
 
-        if type_left == VictimTypes.sign:
+        if type_left == VictimTypes.sign and baby_status.s4.getValue() < 0.1:
 
             if baby_controller.stopCounter == 0:
                 baby_controller.dont_move()
@@ -856,7 +865,7 @@ class CameraClass:
                 baby_planner.send_victim(self.cfop_type[np.argmax(self.cfop_model.predict(img1)[0])])
                 self.victim_positions.append((baby_location.tilePosX, baby_location.tilePosY))
 
-        if type_right == VictimTypes.sign:
+        if type_right == VictimTypes.sign and baby_status.s2.getValue() < 0.1:
 
             if baby_controller.stopCounter == 0:
                 baby_controller.dont_move()
