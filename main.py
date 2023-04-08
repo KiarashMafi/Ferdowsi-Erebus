@@ -97,7 +97,6 @@ class LocationClass:
         self.passedBlocksCounter = 0
         self.repeatedBlocksCounter = 0
         self.move_straight_error = 0.0
-        self.visited_counts = {}
 
     def set_tile_pos(self):
         self.map[2 * self.tilePosX + 1][2 * self.tilePosY + 1] = 1
