@@ -93,9 +93,9 @@ class MapBonus:
 
     def set_map_floor(self, tileX, tileY, color: GameColors):
         if color != GameColors.other and (color == GameColors.green or baby_location.light_in_tile_center()):
-            if color != GameColors.green:
-                print(
-                    f"robot-tile : {baby_location.tilePosX, baby_location.tilePosY}, light-tile : {tileX, tileY} , color:{color}")
+            # if color != GameColors.green:
+                # print(
+                #     f"robot-tile : {baby_location.tilePosX, baby_location.tilePosY}, light-tile : {tileX, tileY} , color:{color}")
             x1 = tileX * 2
             x2 = tileX * 2 + 1
             y1 = tileY * 2
@@ -346,6 +346,8 @@ class RobotControlClass:
         self.leftWheelPos = 0
         self.rightWheelPos = 0
         self.stopFlag = False
+        self.leftWheelSpeed = 0
+        self.rightWheelSpeed = 0
 
     def run(self):
         if self.state == MoveState.forward:
@@ -378,10 +380,10 @@ class RobotControlClass:
             er = .003 / baby_status.s2.getValue()
         if baby_status.s4.getValue() < .03:
             el = .003 / baby_status.s4.getValue()
-        leftWheelSpeed = self.max_velocity * .8 - e + er
-        rightWheelSpeed = self.max_velocity * .8 + e + el
-        self.left_wheel.setVelocity(leftWheelSpeed)
-        self.right_wheel.setVelocity(rightWheelSpeed)
+        self.leftWheelSpeed = self.max_velocity * .8 - e + er
+        self.rightWheelSpeed = self.max_velocity * .8 + e + el
+        self.left_wheel.setVelocity(self.leftWheelSpeed)
+        self.right_wheel.setVelocity(self.rightWheelSpeed)
 
     def turn_left(self):
         baby_location.history.clear()
@@ -390,16 +392,13 @@ class RobotControlClass:
             self.leftWheelPos = self.leftWheelPosSensor.getValue()
             self.rightWheelPos = self.rightWheelPosSensor.getValue()
         else:
-            self.left_wheel.setVelocity(self.max_velocity - 3)
-            self.right_wheel.setVelocity(self.max_velocity - 3)
-            self.left_wheel.setPosition(self.leftWheelPos + 4.42 / 2)
-            self.right_wheel.setPosition(self.rightWheelPos - 4.42 / 2)
+            self.left_wheel.setVelocity(self.max_velocity * 0.3)
+            self.right_wheel.setVelocity(-self.max_velocity * 0.3)
 
             if abs((self.leftWheelPos + 4.42 / 2) - self.leftWheelPosSensor.getValue()) < .1:
-                self.left_wheel.setPosition(float("inf"))
-                self.right_wheel.setPosition(float("inf"))
                 self.turn_state = TurnState.not_started
                 self.state = MoveState.forward
+                print("turn left done")
 
     def turn_right(self):
         baby_location.history.clear()
@@ -408,16 +407,13 @@ class RobotControlClass:
             self.leftWheelPos = self.leftWheelPosSensor.getValue()
             self.rightWheelPos = self.rightWheelPosSensor.getValue()
         else:
-            self.left_wheel.setVelocity(self.max_velocity - 3)
-            self.right_wheel.setVelocity(self.max_velocity - 3)
-            self.left_wheel.setPosition(self.leftWheelPos - 4.42 / 2)
-            self.right_wheel.setPosition(self.rightWheelPos + 4.42 / 2)
+            self.left_wheel.setVelocity(-self.max_velocity * 0.3)
+            self.right_wheel.setVelocity(self.max_velocity * 0.3)
 
             if abs((self.leftWheelPos - 4.42 / 2) - self.leftWheelPosSensor.getValue()) < .1:
-                self.left_wheel.setPosition(float("inf"))
-                self.right_wheel.setPosition(float("inf"))
                 self.turn_state = TurnState.not_started
                 self.state = MoveState.forward
+                print("turn right done")
 
     def turn_back(self):
         baby_location.history.clear()
@@ -426,16 +422,13 @@ class RobotControlClass:
             self.leftWheelPos = self.leftWheelPosSensor.getValue()
             self.rightWheelPos = self.rightWheelPosSensor.getValue()
         else:
-            self.left_wheel.setVelocity(self.max_velocity - 4)
-            self.right_wheel.setVelocity(self.max_velocity - 4)
-            self.left_wheel.setPosition(self.leftWheelPos + 4.42)
-            self.right_wheel.setPosition(self.rightWheelPos - 4.42)
+            self.left_wheel.setVelocity(self.max_velocity * 0.3)
+            self.right_wheel.setVelocity(-self.max_velocity * 0.3)
 
             if abs((self.leftWheelPos + 4.42) - self.leftWheelPosSensor.getValue()) < .1:
-                self.left_wheel.setPosition(float("inf"))
-                self.right_wheel.setPosition(float("inf"))
                 self.turn_state = TurnState.not_started
                 self.state = MoveState.forward
+                print("turn back done")
 
     def move_back(self):
         baby_location.history.clear()
@@ -443,6 +436,7 @@ class RobotControlClass:
         rightWheelSpeed = -self.max_velocity
         self.left_wheel.setVelocity(leftWheelSpeed)
         self.right_wheel.setVelocity(rightWheelSpeed)
+        print("PEDARET")
 
     def stop(self):
         self.stopCounter += 1
@@ -453,7 +447,7 @@ class RobotControlClass:
         if self.stopCounter >= 100:
             self.stopCounter = 0
             self.state = MoveState.forward
-            print("Sending victim done!")
+            # print("Sending victim done!")
 
         baby_location.history.clear()
         self.left_wheel.setVelocity(0)
@@ -466,7 +460,6 @@ class StatusClass:
         self.right_status = AroundStatus.is_empty
         self.front_status = AroundStatus.is_empty
         self.behind_status = AroundStatus.is_empty
-        print("Here")
         self.s1: DistanceSensor = robot.getDevice("ds0")
         self.s2: DistanceSensor = robot.getDevice("ds1")
         self.s3: DistanceSensor = robot.getDevice("ds2")
@@ -485,14 +478,11 @@ class StatusClass:
                 and baby_cam.get_color() != GameColors.black:
             if baby_location.is_tile_seen(baby_location.NextPosForward):
                 self.front_status = AroundStatus.is_seen
-                print("1")
 
             else:
                 self.front_status = AroundStatus.is_empty
-                print("2")
         else:
             self.front_status = AroundStatus.is_wall
-            print("3")
 
         if self.s2.getValue() > 0.09:
             if baby_location.is_tile_seen(baby_location.NextPosRight):
@@ -518,8 +508,8 @@ class StatusClass:
         else:
             self.behind_status = AroundStatus.is_wall
 
-        print(
-            f"S1:{self.s1.getValue()} , S6: {self.s6.getValue()}, S5: {self.s5.getValue()}, Forward status : {self.front_status}")
+        # print(
+        #     f"S1:{self.s1.getValue()} , S6: {self.s6.getValue()}, S5: {self.s5.getValue()}, Forward status : {self.front_status}")
 
 
 class ReturnPath:
@@ -635,11 +625,9 @@ class AIPlannerClass:
         if baby_location.stuckCounter > 30:
 
             if baby_status.s3.getValue() < 0.2 or baby_status.s5.getValue() < 0.2:
-                print("Stuck! Turning right")
                 baby_controller.state = MoveState.turnRight
 
             elif baby_status.s1.getValue() < 0.2 or baby_status.s6.getValue() < 0.2:
-                print("Stuck! Turning left")
                 baby_controller.state = MoveState.turnLeft
 
             elif baby_status.s2.getValue() < 0.2 and baby_status.s4.getValue() < 0.2:
@@ -647,9 +635,10 @@ class AIPlannerClass:
 
             return
 
-        if baby_status.front_status == AroundStatus.is_wall or (
-                baby_location.robot_in_tile_center() and baby_location.blockChanged) \
-                or baby_cam.get_color() == GameColors.black:
+        if (baby_status.front_status == AroundStatus.is_wall or (
+                baby_location.robot_in_tile_center() and baby_location.blockChanged)
+                or baby_cam.get_color() == GameColors.black) and baby_cam.get_color():
+            print("Out of swamp")
             allChoice = []
             emptyChoice = []
             baby_location.blockChanged = False
@@ -797,7 +786,7 @@ class CameraClass:
         self.victim_positions = []
         self.hsu_model_json = '{"class_name": "Sequential", "config": {"name": "sequential", "layers": [{"class_name": "InputLayer", "config": {"batch_input_shape": [null, 64, 40, 3], "dtype": "float32", "sparse": false, "ragged": false, "name": "input_1"}}, {"class_name": "Conv2D", "config": {"name": "conv2d", "trainable": true, "dtype": "float32", "filters": 64, "kernel_size": [3, 3], "strides": [1, 1], "padding": "valid", "data_format": "channels_last", "dilation_rate": [1, 1], "groups": 1, "activation": "relu", "use_bias": true, "kernel_initializer": {"class_name": "GlorotUniform", "config": {"seed": null}}, "bias_initializer": {"class_name": "Zeros", "config": {}}, "kernel_regularizer": null, "bias_regularizer": null, "activity_regularizer": null, "kernel_constraint": null, "bias_constraint": null}}, {"class_name": "MaxPooling2D", "config": {"name": "max_pooling2d", "trainable": true, "dtype": "float32", "pool_size": [2, 2], "padding": "valid", "strides": [2, 2], "data_format": "channels_last"}}, {"class_name": "Conv2D", "config": {"name": "conv2d_1", "trainable": true, "dtype": "float32", "filters": 64, "kernel_size": [3, 3], "strides": [1, 1], "padding": "valid", "data_format": "channels_last", "dilation_rate": [1, 1], "groups": 1, "activation": "relu", "use_bias": true, "kernel_initializer": {"class_name": "GlorotUniform", "config": {"seed": null}}, "bias_initializer": {"class_name": "Zeros", "config": {}}, "kernel_regularizer": null, "bias_regularizer": null, "activity_regularizer": null, "kernel_constraint": null, "bias_constraint": null}}, {"class_name": "MaxPooling2D", "config": {"name": "max_pooling2d_1", "trainable": true, "dtype": "float32", "pool_size": [2, 2], "padding": "valid", "strides": [2, 2], "data_format": "channels_last"}}, {"class_name": "Flatten", "config": {"name": "flatten", "trainable": true, "dtype": "float32", "data_format": "channels_last"}}, {"class_name": "Dropout", "config": {"name": "dropout", "trainable": true, "dtype": "float32", "rate": 0.5, "noise_shape": null, "seed": null}}, {"class_name": "Dense", "config": {"name": "dense", "trainable": true, "dtype": "float32", "units": 3, "activation": "softmax", "use_bias": true, "kernel_initializer": {"class_name": "GlorotUniform", "config": {"seed": null}}, "bias_initializer": {"class_name": "Zeros", "config": {}}, "kernel_regularizer": null, "bias_regularizer": null, "activity_regularizer": null, "kernel_constraint": null, "bias_constraint": null}}]}, "keras_version": "2.11.0", "backend": "tensorflow"}'
         self.cfop_model_json = '{"class_name": "Sequential", "config": {"name": "sequential", "layers": [{"class_name": "InputLayer", "config": {"batch_input_shape": [null, 64, 40, 3], "dtype": "float32", "sparse": false, "ragged": false, "name": "input_1"}}, {"class_name": "Conv2D", "config": {"name": "conv2d", "trainable": true, "dtype": "float32", "filters": 64, "kernel_size": [3, 3], "strides": [1, 1], "padding": "valid", "data_format": "channels_last", "dilation_rate": [1, 1], "groups": 1, "activation": "relu", "use_bias": true, "kernel_initializer": {"class_name": "GlorotUniform", "config": {"seed": null}}, "bias_initializer": {"class_name": "Zeros", "config": {}}, "kernel_regularizer": null, "bias_regularizer": null, "activity_regularizer": null, "kernel_constraint": null, "bias_constraint": null}}, {"class_name": "MaxPooling2D", "config": {"name": "max_pooling2d", "trainable": true, "dtype": "float32", "pool_size": [2, 2], "padding": "valid", "strides": [2, 2], "data_format": "channels_last"}}, {"class_name": "Conv2D", "config": {"name": "conv2d_1", "trainable": true, "dtype": "float32", "filters": 64, "kernel_size": [3, 3], "strides": [1, 1], "padding": "valid", "data_format": "channels_last", "dilation_rate": [1, 1], "groups": 1, "activation": "relu", "use_bias": true, "kernel_initializer": {"class_name": "GlorotUniform", "config": {"seed": null}}, "bias_initializer": {"class_name": "Zeros", "config": {}}, "kernel_regularizer": null, "bias_regularizer": null, "activity_regularizer": null, "kernel_constraint": null, "bias_constraint": null}}, {"class_name": "MaxPooling2D", "config": {"name": "max_pooling2d_1", "trainable": true, "dtype": "float32", "pool_size": [2, 2], "padding": "valid", "strides": [2, 2], "data_format": "channels_last"}}, {"class_name": "Flatten", "config": {"name": "flatten", "trainable": true, "dtype": "float32", "data_format": "channels_last"}}, {"class_name": "Dropout", "config": {"name": "dropout", "trainable": true, "dtype": "float32", "rate": 0.5, "noise_shape": null, "seed": null}}, {"class_name": "Dense", "config": {"name": "dense", "trainable": true, "dtype": "float32", "units": 4, "activation": "softmax", "use_bias": true, "kernel_initializer": {"class_name": "GlorotUniform", "config": {"seed": null}}, "bias_initializer": {"class_name": "Zeros", "config": {}}, "kernel_regularizer": null, "bias_regularizer": null, "activity_regularizer": null, "kernel_constraint": null, "bias_constraint": null}}]}, "keras_version": "2.11.0", "backend": "tensorflow"}'
-        model_path = 'D:\\mojef\\Ferdowsi-Erebus'
+        model_path = 'C:\\Users\\lenovo\\Documents\\Webot\\main'
         self.hsu_model: keras.models.Model = model_from_json(self.hsu_model_json)
         self.hsu_model.load_weights(f"{model_path}\\model_hsu.h5")
         self.cfop_model: keras.models.Model = model_from_json(self.cfop_model_json)
@@ -861,7 +850,7 @@ class CameraClass:
             if 160 <= color <= 170 and per > .30:
                 tasvir_shart2 = True
 
-            print(f"Color: {color}, Per: {per}")
+            # print(f"Color: {color}, Per: {per}")
 
         if harf_shart1 and harf_shart2:
             return VictimTypes.victim
@@ -955,7 +944,10 @@ baby_search_finder = ReturnPath(0, 0)
 
 while baby_robot.step(timeStep) != -1:
     try:
+        print(baby_controller.state)
         baby_planner.plan()
+        print(f"left: {baby_controller.leftWheelSpeed}, right: {baby_controller.rightWheelSpeed}")
+
     except:
         pass
     # print(baby_controller.state)
