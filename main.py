@@ -474,17 +474,15 @@ class StatusClass:
         self.s6.enable(timeStep)
 
     def update_status(self):
-        if self.s1.getValue() > 0.08 and self.s5.getValue() > 0.03 and self.s6.getValue() > 0.03 \
-                and baby_cam.get_color() != GameColors.black:
+        if self.s1.getValue() > 0.08 and self.s5.getValue() > 0.03 and self.s6.getValue() > 0.03 :
             if baby_location.is_tile_seen(baby_location.NextPosForward):
                 self.front_status = AroundStatus.is_seen
-
             else:
                 self.front_status = AroundStatus.is_empty
         else:
             self.front_status = AroundStatus.is_wall
 
-        if self.s2.getValue() > 0.09:
+        if self.s2.getValue() > 0.08:
             if baby_location.is_tile_seen(baby_location.NextPosRight):
                 self.right_status = AroundStatus.is_seen
             else:
@@ -492,7 +490,7 @@ class StatusClass:
         else:
             self.right_status = AroundStatus.is_wall
 
-        if self.s4.getValue() > 0.09:
+        if self.s4.getValue() > 0.08:
             if baby_location.is_tile_seen(baby_location.NextPosLeft):
                 self.left_status = AroundStatus.is_seen
             else:
@@ -500,7 +498,7 @@ class StatusClass:
         else:
             self.left_status = AroundStatus.is_wall
 
-        if self.s3.getValue() > 0.09:
+        if self.s3.getValue() > 0.08:
             if baby_location.is_tile_seen(baby_location.NextPosBackward):
                 self.behind_status = AroundStatus.is_seen
             else:
@@ -583,6 +581,7 @@ class AIPlannerClass:
         self.emitter = robot.getDevice("emitter")
         self.receiver = robot.getDevice("receiver")
         self.receiver.enable(timeStep)
+        self.not_seen_tiles = set()
         # Enable the receiver. Note that the emitter does not need to call enable()
         self.score = 0
         self.remained_time = 1000
@@ -616,9 +615,18 @@ class AIPlannerClass:
                 self.return_start_tile()
             elif self.ai_state == AIStates.not_seen_searching:
                 self.go_to_not_seen_tile()
+        # baby_controller.dont_move()
+        # print(
+        # f"s1:{baby_status.s1.getValue()},s2:{baby_status.s2.getValue()},"
+        # f"s3:{baby_status.s3.getValue()},s4:{baby_status.s4.getValue()},"
+        # f"location:{baby_location.tilePosX,baby_location.tilePosY},x,y:{baby_location.x,baby_location.y}")
         baby_controller.run()
 
     def random_search(self):
+        global baby_search_finder
+        # print(baby_location.direction,baby_status.front_status,baby_status.right_status,baby_status.left_status,baby_status.behind_status)
+        if (baby_location.tilePosX, baby_location.tilePosY) in self.not_seen_tiles:
+            self.not_seen_tiles.remove((baby_location.tilePosX, baby_location.tilePosY))
         if baby_controller.state != MoveState.forward or baby_location.direction == Direction.not_initialized:
             return
 
@@ -666,6 +674,27 @@ class AIPlannerClass:
 
             if len(emptyChoice) > 0:
                 baby_controller.state = random.choice(emptyChoice)
+                if len(emptyChoice) > 1:
+                    emptyChoice.remove(baby_controller.state)
+                    for choice in emptyChoice:
+                        if choice == MoveState.forward:
+                            self.not_seen_tiles.add(tuple(baby_location.NextPosForward))
+
+                        elif choice == MoveState.turnLeft:
+                            self.not_seen_tiles.add(tuple(baby_location.NextPosLeft))
+
+                        elif choice == MoveState.turnRight:
+                            self.not_seen_tiles.add(tuple(baby_location.NextPosRight))
+
+                        elif choice == MoveState.turnBack:
+                            print("is back")
+                            self.not_seen_tiles.add(tuple(baby_location.NextPosBackward))
+            elif len(self.not_seen_tiles) > 0:
+                target_tile = self.not_seen_tiles.pop()
+                baby_search_finder = ReturnPath(*target_tile)
+                self.ai_state = AIStates.not_seen_searching
+                print("go to not seen section")
+                print(baby_search_finder.get_best_path(baby_location.tilePosX, baby_location.tilePosY))
             elif len(allChoice) > 0:
                 baby_controller.state = random.choice(allChoice)
             else:
@@ -750,7 +779,7 @@ class AIPlannerClass:
             self.emitter.send(message)
 
             if self.receiver.getQueueLength() > 0:
-                recivedData = self.receiver.getData()
+                recivedData = self.receiver.getString()
                 tup = struct.unpack('c f i', recivedData)
                 if tup[0].decode("utf-8") == 'G':
                     self.receiver.nextPacket()
@@ -772,7 +801,59 @@ class AIPlannerClass:
         self.emitter.send(map_evaluate_request)
 
     def go_to_not_seen_tile(self):
-        pass
+        print("in go_to_not_seen_tile section *************************************************************** ")
+        best_path = baby_search_finder.get_best_path(baby_location.tilePosX, baby_location.tilePosY)
+
+        if len(best_path) < 2:
+            self.ai_state = AIStates.random_searching
+
+        p1 = best_path[0]
+        p2 = best_path[1]
+        dx = p2[0] - p1[0]
+        dy = p2[1] - p1[1]
+
+        if baby_location.robot_in_tile_center() and baby_location.blockChanged:
+            baby_location.blockChanged = False
+
+            if baby_location.direction == Direction.up:
+                if dx == 1:
+                    baby_controller.state = MoveState.turnRight
+                if dx == -1:
+                    baby_controller.state = MoveState.turnLeft
+                if dy == 1:
+                    baby_controller.state = MoveState.turnBack
+                if dy == -1:
+                    baby_controller.state = MoveState.forward
+
+            if baby_location.direction == Direction.down:
+                if dx == 1:
+                    baby_controller.state = MoveState.turnLeft
+                if dx == -1:
+                    baby_controller.state = MoveState.turnRight
+                if dy == 1:
+                    baby_controller.state = MoveState.forward
+                if dy == -1:
+                    baby_controller.state = MoveState.turnBack
+
+            if baby_location.direction == Direction.left:
+                if dx == 1:
+                    baby_controller.state = MoveState.turnBack
+                if dx == -1:
+                    baby_controller.state = MoveState.forward
+                if dy == 1:
+                    baby_controller.state = MoveState.turnLeft
+                if dy == -1:
+                    baby_controller.state = MoveState.turnRight
+
+            if baby_location.direction == Direction.right:
+                if dx == 1:
+                    baby_controller.state = MoveState.forward
+                if dx == -1:
+                    baby_controller.state = MoveState.turnBack
+                if dy == 1:
+                    baby_controller.state = MoveState.turnRight
+                if dy == -1:
+                    baby_controller.state = MoveState.turnLeft
 
 
 class CameraClass:
