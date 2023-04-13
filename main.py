@@ -66,6 +66,48 @@ class TurnState(Enum):
     turning = 1
 
 
+class MapBonus:
+    def __init__(self):
+        self.MAP_SIZE = 80
+        self.map = [[0 for _ in range(2 * self.MAP_SIZE + 1)] for _ in range(2 * self.MAP_SIZE + 1)]
+
+    def update_map(self):
+        self.update_walls()
+        self.update_floors()
+
+    def update_walls(self):
+        pass
+
+    def fill_start_tile(self):
+        x, y = baby_location.startingTilePos
+        self.set_map_floor(x, y, GameColors.green)
+
+    def update_floors(self):
+        self.fill_start_tile()
+        color = baby_cam.get_color()
+        x = baby_location.light_x_tile
+        y = baby_location.light_y_tile
+        if baby_location.direction != Direction.not_initialized:
+            self.set_map_floor(x, y, color)
+
+    def set_map_floor(self, tileX, tileY, color: GameColors):
+        if color != GameColors.other and ( color == GameColors.green or baby_location.light_in_tile_center()):
+            if color != GameColors.green:
+                print(
+                    f"robot-tile : {baby_location.tilePosX, baby_location.tilePosY}, light-tile : {tileX, tileY} , color:{color}")
+            x1 = tileX * 2
+            x2 = tileX * 2 + 1
+            y1 = tileY * 2
+            y2 = tileY * 2 + 1
+            self.fill_map_bonus_color(x1, y1, color)
+            self.fill_map_bonus_color(x1, y2, color)
+            self.fill_map_bonus_color(x2, y1, color)
+            self.fill_map_bonus_color(x2, y2, color)
+
+    def fill_map_bonus_color(self, x_small_tile, y_small_tile, color: GameColors):
+        self.map[2 * x_small_tile + 1][2 * y_small_tile + 1] = str(color.value)
+
+
 # Control Classes
 class LocationClass:
     def __init__(self, robot: Robot):
@@ -137,7 +179,7 @@ class LocationClass:
         if len(self.history) > 9:
             self.history.remove(self.history[0])
         self.lightX, self.lightY = self.get_light_pos()
-        self.light_x_tile = int((self.lightX - self.offsetY + 0.06) // 0.12 + self.MAP_SIZE // 2)
+        self.light_x_tile = int((self.lightX - self.offsetX + 0.06) // 0.12 + self.MAP_SIZE // 2)
         self.light_y_tile = int((self.lightY - self.offsetY + 0.06) // 0.12 + self.MAP_SIZE // 2)
         if len(self.history) == 9:
             self.direction = self.get_direction()
@@ -238,8 +280,13 @@ class LocationClass:
             return 2 if (self.y - self.offsetY) % .12 > .06 else 4
 
     def get_light_pos(self):
-        lightOffsetX = 0 if dir in ('Up', 'Down') else -1.5 * ROBOT_RADIUS if dir == 'Left' else 1.5 * ROBOT_RADIUS
-        lightOffsetY = 0 if dir in ('Left', 'Right') else -1.5 * ROBOT_RADIUS if dir == 'Up' else 1.5 * ROBOT_RADIUS
+        direction = self.get_direction()
+        lightOffsetX = 0 if direction in (
+            Direction.up,
+            Direction.down) else -1.5 * ROBOT_RADIUS if direction == Direction.left else 1.5 * ROBOT_RADIUS
+        lightOffsetY = 0 if direction in (
+            Direction.left,
+            Direction.right) else -1.5 * ROBOT_RADIUS if direction == Direction.up else 1.5 * ROBOT_RADIUS
         return self.x + lightOffsetX, self.y + lightOffsetY
 
     def is_stuck(self):
@@ -271,6 +318,12 @@ class LocationClass:
         return (0.055 <= (self.y - self.offsetY + 0.06) % 0.12 < 0.065 and self.direction in [
             Direction.up, Direction.down]) or \
                (0.055 <= (self.x - self.offsetX + 0.06) % 0.12 < 0.065 and self.direction in [
+                   Direction.left, Direction.right])
+
+    def light_in_tile_center(self):
+        return (0.055 <= (self.lightY - self.offsetY + 0.06) % 0.12 < 0.065 and self.direction in [
+            Direction.up, Direction.down]) or \
+               (0.055 <= (self.lightX - self.offsetX + 0.06) % 0.12 < 0.065 and self.direction in [
                    Direction.left, Direction.right])
 
 
@@ -427,7 +480,6 @@ class StatusClass:
         self.s6.enable(timeStep)
 
     def update_status(self):
-
         if self.s1.getValue() > 0.08 and self.s5.getValue() > 0.03 and self.s6.getValue() > 0.03\
                 and baby_cam.get_color() != GameColors.black:
             if baby_location.is_tile_seen(baby_location.NextPosForward):
@@ -548,7 +600,7 @@ class AIPlannerClass:
         if self.initial_time == -1:
             self.ai_state = AIStates.random_searching
             return
-        if self.remained_time / self.initial_time > .2:
+        if self.remained_time / self.initial_time > .9:
             self.ai_state = AIStates.random_searching
         # elif self.remained_time / self.initial_time > .3:
         #     self.ai_state = AIStates.wall_following
@@ -560,6 +612,7 @@ class AIPlannerClass:
         baby_status.update_status()
         baby_location.update_parameters()
         baby_cam.check_victim()
+        baby_map_bonus.update_map()
         self.choose_state()
         if baby_controller.state != MoveState.stop:
 
@@ -695,22 +748,26 @@ class AIPlannerClass:
         self.emitter.send(message)  # Send out the message
 
     def send_finish(self):
+        self.send_map_array(np.array(baby_map_bonus.map))
         exit_mes = struct.pack('c', b'E')
         self.emitter.send(exit_mes)
 
     def update_game_time_score(self):
-        message = struct.pack('c', 'G'.encode())
-        self.emitter.send(message)
+        try:
+            message = struct.pack('c', 'G'.encode())
+            self.emitter.send(message)
 
-        if self.receiver.getQueueLength() > 0:
-            recivedData = self.receiver.getData()
-            tup = struct.unpack('c f i', recivedData)
-            if tup[0].decode("utf-8") == 'G':
-                self.receiver.nextPacket()
-                self.score = tup[1]
-                self.remained_time = tup[2]
-                if self.initial_time == -1:
-                    self.initial_time = self.remained_time
+            if self.receiver.getQueueLength() > 0:
+                recivedData = self.receiver.getData()
+                tup = struct.unpack('c f i', recivedData)
+                if tup[0].decode("utf-8") == 'G':
+                    self.receiver.nextPacket()
+                    self.score = tup[1]
+                    self.remained_time = tup[2]
+                    if self.initial_time == -1:
+                        self.initial_time = self.remained_time
+        except:
+            pass
 
     def send_map_array(self, array: np.ndarray):
         s = array.shape
@@ -734,7 +791,7 @@ class CameraClass:
         self.victim_positions = []
         self.hsu_model_json = '{"class_name": "Sequential", "config": {"name": "sequential", "layers": [{"class_name": "InputLayer", "config": {"batch_input_shape": [null, 64, 40, 3], "dtype": "float32", "sparse": false, "ragged": false, "name": "input_1"}}, {"class_name": "Conv2D", "config": {"name": "conv2d", "trainable": true, "dtype": "float32", "filters": 64, "kernel_size": [3, 3], "strides": [1, 1], "padding": "valid", "data_format": "channels_last", "dilation_rate": [1, 1], "groups": 1, "activation": "relu", "use_bias": true, "kernel_initializer": {"class_name": "GlorotUniform", "config": {"seed": null}}, "bias_initializer": {"class_name": "Zeros", "config": {}}, "kernel_regularizer": null, "bias_regularizer": null, "activity_regularizer": null, "kernel_constraint": null, "bias_constraint": null}}, {"class_name": "MaxPooling2D", "config": {"name": "max_pooling2d", "trainable": true, "dtype": "float32", "pool_size": [2, 2], "padding": "valid", "strides": [2, 2], "data_format": "channels_last"}}, {"class_name": "Conv2D", "config": {"name": "conv2d_1", "trainable": true, "dtype": "float32", "filters": 64, "kernel_size": [3, 3], "strides": [1, 1], "padding": "valid", "data_format": "channels_last", "dilation_rate": [1, 1], "groups": 1, "activation": "relu", "use_bias": true, "kernel_initializer": {"class_name": "GlorotUniform", "config": {"seed": null}}, "bias_initializer": {"class_name": "Zeros", "config": {}}, "kernel_regularizer": null, "bias_regularizer": null, "activity_regularizer": null, "kernel_constraint": null, "bias_constraint": null}}, {"class_name": "MaxPooling2D", "config": {"name": "max_pooling2d_1", "trainable": true, "dtype": "float32", "pool_size": [2, 2], "padding": "valid", "strides": [2, 2], "data_format": "channels_last"}}, {"class_name": "Flatten", "config": {"name": "flatten", "trainable": true, "dtype": "float32", "data_format": "channels_last"}}, {"class_name": "Dropout", "config": {"name": "dropout", "trainable": true, "dtype": "float32", "rate": 0.5, "noise_shape": null, "seed": null}}, {"class_name": "Dense", "config": {"name": "dense", "trainable": true, "dtype": "float32", "units": 3, "activation": "softmax", "use_bias": true, "kernel_initializer": {"class_name": "GlorotUniform", "config": {"seed": null}}, "bias_initializer": {"class_name": "Zeros", "config": {}}, "kernel_regularizer": null, "bias_regularizer": null, "activity_regularizer": null, "kernel_constraint": null, "bias_constraint": null}}]}, "keras_version": "2.11.0", "backend": "tensorflow"}'
         self.cfop_model_json = '{"class_name": "Sequential", "config": {"name": "sequential", "layers": [{"class_name": "InputLayer", "config": {"batch_input_shape": [null, 64, 40, 3], "dtype": "float32", "sparse": false, "ragged": false, "name": "input_1"}}, {"class_name": "Conv2D", "config": {"name": "conv2d", "trainable": true, "dtype": "float32", "filters": 64, "kernel_size": [3, 3], "strides": [1, 1], "padding": "valid", "data_format": "channels_last", "dilation_rate": [1, 1], "groups": 1, "activation": "relu", "use_bias": true, "kernel_initializer": {"class_name": "GlorotUniform", "config": {"seed": null}}, "bias_initializer": {"class_name": "Zeros", "config": {}}, "kernel_regularizer": null, "bias_regularizer": null, "activity_regularizer": null, "kernel_constraint": null, "bias_constraint": null}}, {"class_name": "MaxPooling2D", "config": {"name": "max_pooling2d", "trainable": true, "dtype": "float32", "pool_size": [2, 2], "padding": "valid", "strides": [2, 2], "data_format": "channels_last"}}, {"class_name": "Conv2D", "config": {"name": "conv2d_1", "trainable": true, "dtype": "float32", "filters": 64, "kernel_size": [3, 3], "strides": [1, 1], "padding": "valid", "data_format": "channels_last", "dilation_rate": [1, 1], "groups": 1, "activation": "relu", "use_bias": true, "kernel_initializer": {"class_name": "GlorotUniform", "config": {"seed": null}}, "bias_initializer": {"class_name": "Zeros", "config": {}}, "kernel_regularizer": null, "bias_regularizer": null, "activity_regularizer": null, "kernel_constraint": null, "bias_constraint": null}}, {"class_name": "MaxPooling2D", "config": {"name": "max_pooling2d_1", "trainable": true, "dtype": "float32", "pool_size": [2, 2], "padding": "valid", "strides": [2, 2], "data_format": "channels_last"}}, {"class_name": "Flatten", "config": {"name": "flatten", "trainable": true, "dtype": "float32", "data_format": "channels_last"}}, {"class_name": "Dropout", "config": {"name": "dropout", "trainable": true, "dtype": "float32", "rate": 0.5, "noise_shape": null, "seed": null}}, {"class_name": "Dense", "config": {"name": "dense", "trainable": true, "dtype": "float32", "units": 4, "activation": "softmax", "use_bias": true, "kernel_initializer": {"class_name": "GlorotUniform", "config": {"seed": null}}, "bias_initializer": {"class_name": "Zeros", "config": {}}, "kernel_regularizer": null, "bias_regularizer": null, "activity_regularizer": null, "kernel_constraint": null, "bias_constraint": null}}]}, "keras_version": "2.11.0", "backend": "tensorflow"}'
-        model_path = 'C:\\Users\\lenovo\\Documents\\Webot\\main'
+        model_path = 'D:\\mojef\\Ferdowsi-Erebus'
         self.hsu_model: keras.models.Model = model_from_json(self.hsu_model_json)
         self.hsu_model.load_weights(f"{model_path}\\model_hsu.h5")
         self.cfop_model: keras.models.Model = model_from_json(self.cfop_model_json)
@@ -747,7 +804,6 @@ class CameraClass:
 
     def get_color(self):
         r, g, b = self.colorSensor.getImageArray()[0][0]
-
         if r < 40 and g < 40 and b < 40:
             return GameColors.black
 
@@ -765,6 +821,8 @@ class CameraClass:
 
         elif self.color_distance(r, g, b, 42, 46, 60) < 50 or self.color_distance(r, g, b, 33, 38, 56) < 50:
             return GameColors.silver
+
+        return GameColors.other
 
     def capture(self):
         img1 = np.array(self.leftCam.getImageArray()).astype(
@@ -882,11 +940,15 @@ baby_controller = RobotControlClass(baby_robot)
 baby_status = StatusClass(baby_robot)
 baby_cam = CameraClass(baby_robot)
 baby_planner = AIPlannerClass(baby_robot)
+baby_map_bonus = MapBonus()
 # start simulation
 baby_robot.step(timeStep)
 baby_location.init_parameters()
 baby_finder = ReturnPath(*baby_location.startingTilePos)
 
 while baby_robot.step(timeStep) != -1:
-    baby_planner.plan()
-    print(baby_controller.state)
+    try:
+        baby_planner.plan()
+    except:
+        pass
+    # print(baby_controller.state)
