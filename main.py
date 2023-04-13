@@ -51,8 +51,9 @@ class Direction(Enum):
 
 class AIStates(Enum):
     random_searching = 0
-    wall_following = 1
-    returning = 2
+    not_seen_searching = 1
+    wall_following = 2
+    returning = 3
 
 
 class AroundStatus(Enum):
@@ -91,7 +92,7 @@ class MapBonus:
             self.set_map_floor(x, y, color)
 
     def set_map_floor(self, tileX, tileY, color: GameColors):
-        if color != GameColors.other and ( color == GameColors.green or baby_location.light_in_tile_center()):
+        if color != GameColors.other and (color == GameColors.green or baby_location.light_in_tile_center()):
             if color != GameColors.green:
                 print(
                     f"robot-tile : {baby_location.tilePosX, baby_location.tilePosY}, light-tile : {tileX, tileY} , color:{color}")
@@ -480,7 +481,7 @@ class StatusClass:
         self.s6.enable(timeStep)
 
     def update_status(self):
-        if self.s1.getValue() > 0.08 and self.s5.getValue() > 0.03 and self.s6.getValue() > 0.03\
+        if self.s1.getValue() > 0.08 and self.s5.getValue() > 0.03 and self.s6.getValue() > 0.03 \
                 and baby_cam.get_color() != GameColors.black:
             if baby_location.is_tile_seen(baby_location.NextPosForward):
                 self.front_status = AroundStatus.is_seen
@@ -517,7 +518,8 @@ class StatusClass:
         else:
             self.behind_status = AroundStatus.is_wall
 
-        print(f"S1:{self.s1.getValue()} , S6: {self.s6.getValue()}, S5: {self.s5.getValue()}, Forward status : {self.front_status}")
+        print(
+            f"S1:{self.s1.getValue()} , S6: {self.s6.getValue()}, S5: {self.s5.getValue()}, Forward status : {self.front_status}")
 
 
 class ReturnPath:
@@ -622,7 +624,8 @@ class AIPlannerClass:
                 self.wall_follow()
             elif self.ai_state == AIStates.returning:
                 self.return_start_tile()
-
+            elif self.ai_state == AIStates.not_seen_searching:
+                self.go_to_not_seen_tile()
         baby_controller.run()
 
     def random_search(self):
@@ -778,6 +781,9 @@ class AIPlannerClass:
         self.emitter.send(a_bytes)
         map_evaluate_request = struct.pack('c', b'M')
         self.emitter.send(map_evaluate_request)
+
+    def go_to_not_seen_tile(self):
+        pass
 
 
 class CameraClass:
@@ -945,6 +951,7 @@ baby_map_bonus = MapBonus()
 baby_robot.step(timeStep)
 baby_location.init_parameters()
 baby_finder = ReturnPath(*baby_location.startingTilePos)
+baby_search_finder = ReturnPath(0, 0)
 
 while baby_robot.step(timeStep) != -1:
     try:
