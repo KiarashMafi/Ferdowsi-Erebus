@@ -6,9 +6,7 @@ import random
 import numpy as np
 import cv2
 from controller import Robot, DistanceSensor, PositionSensor, GPS, Camera
-import keras
-from tensorflow.python.keras.models import model_from_json
-import matplotlib.pyplot as plt
+import tensorflow as tf
 
 ROBOT_RADIUS = .04
 
@@ -94,8 +92,8 @@ class MapBonus:
     def set_map_floor(self, tileX, tileY, color: GameColors):
         if color != GameColors.other and (color == GameColors.green or baby_location.light_in_tile_center()):
             # if color != GameColors.green:
-            # print(
-            #     f"robot-tile : {baby_location.tilePosX, baby_location.tilePosY}, light-tile : {tileX, tileY} , color:{color}")
+                # print(
+                #     f"robot-tile : {baby_location.tilePosX, baby_location.tilePosY}, light-tile : {tileX, tileY} , color:{color}")
             x1 = tileX * 2
             x2 = tileX * 2 + 1
             y1 = tileY * 2
@@ -400,7 +398,7 @@ class RobotControlClass:
             self.left_wheel.setVelocity(self.max_velocity * 0.3)
             self.right_wheel.setVelocity(-self.max_velocity * 0.3)
 
-            if self.leftWheelPosSensor.getValue() > (self.leftWheelPos + 4.42 / 2):
+            if abs((self.leftWheelPos + 4.42 / 2) - self.leftWheelPosSensor.getValue()) < .1:
                 self.turn_state = TurnState.not_started
                 self.state = MoveState.forward
 
@@ -414,7 +412,7 @@ class RobotControlClass:
             self.left_wheel.setVelocity(-self.max_velocity * 0.3)
             self.right_wheel.setVelocity(self.max_velocity * 0.3)
 
-            if self.leftWheelPosSensor.getValue() < (self.leftWheelPos - 4.42 / 2):
+            if abs((self.leftWheelPos - 4.42 / 2) - self.leftWheelPosSensor.getValue()) < .1:
                 self.turn_state = TurnState.not_started
                 self.state = MoveState.forward
 
@@ -428,7 +426,7 @@ class RobotControlClass:
             self.left_wheel.setVelocity(self.max_velocity * 0.3)
             self.right_wheel.setVelocity(-self.max_velocity * 0.3)
 
-            if self.leftWheelPosSensor.getValue() > (self.leftWheelPos + 4.42):
+            if abs((self.leftWheelPos + 4.42) - self.leftWheelPosSensor.getValue()) < .1:
                 self.turn_state = TurnState.not_started
                 self.state = MoveState.forward
 
@@ -475,7 +473,7 @@ class StatusClass:
         self.s6.enable(timeStep)
 
     def update_status(self):
-        if self.s1.getValue() > 0.08 and self.s5.getValue() > 0.03 and self.s6.getValue() > 0.03:
+        if self.s1.getValue() > 0.08 and self.s5.getValue() > 0.03 and self.s6.getValue() > 0.03 :
             if baby_location.is_tile_seen(baby_location.NextPosForward):
                 self.front_status = AroundStatus.is_seen
             else:
@@ -530,33 +528,27 @@ class ReturnPath:
             self.all_path.append(copy.copy(self.list_hazfi))
             self.list_hazfi.remove((x, y))
 
-        if 2 * y - 1 >= 0 and (
-                baby_location.map[2 * x + 1][2 * y + 1 - 2] == 1 or (x == self.startx and y - 1 == self.starty)) and (
-                x, y - 1) not in self.list_hazfi and \
+        if 2 * y - 1 >= 0 and baby_location.map[2 * x + 1][2 * y + 1 - 2] == 1 and (x, y - 1) not in self.list_hazfi and \
                 baby_location.map[2 * x + 1][2 * y + 1 - 1] != 2:
             self.list_hazfi.append((x, y))
             self.get_path(x, y - 1)
             self.list_hazfi.remove((x, y))
 
-        if 2 * y + 3 < self.map_size and (
-                baby_location.map[2 * x + 1][2 * y + 1 + 2] == 1 or (x == self.startx and y + 1 == self.starty)) and (
+        if 2 * y + 3 < self.map_size and baby_location.map[2 * x + 1][2 * y + 1 + 2] == 1 and (
                 x, y + 1) not in self.list_hazfi and \
                 baby_location.map[2 * x + 1][2 * y + 1 + 1] != 2:
             self.list_hazfi.append((x, y))
             self.get_path(x, y + 1)
             self.list_hazfi.remove((x, y))
 
-        if 2 * x - 1 >= 0 and (
-                baby_location.map[2 * x + 1 - 2][2 * y + 1] == 1 or (x - 1 == self.startx and y == self.starty)) and (
-                x - 1, y) not in self.list_hazfi and \
+        if 2 * x - 1 >= 0 and baby_location.map[2 * x + 1 - 2][2 * y + 1] == 1 and (x - 1, y) not in self.list_hazfi and \
                 baby_location.map[2 * x + 1 - 1][
                     2 * y + 1] != 2:
             self.list_hazfi.append((x, y))
             self.get_path(x - 1, y)
             self.list_hazfi.remove((x, y))
 
-        if 2 * x + 3 < self.map_size and baby_location.map[2 * x + 1 + 2][2 * y + 1] == 1 or (
-                x + 1 == self.startx and y == self.starty) and \
+        if 2 * x + 3 < self.map_size and baby_location.map[2 * x + 1 + 2][2 * y + 1] == 1 and \
                 (x + 1, y) not in self.list_hazfi and \
                 baby_location.map[2 * x + 1 + 1][2 * y + 1] != 2:
             self.list_hazfi.append((x, y))
@@ -593,7 +585,6 @@ class AIPlannerClass:
         self.score = 0
         self.remained_time = 1000
         self.initial_time = -1
-        self.area_number = 1
 
     def choose_state(self):
         if self.initial_time == -1:
@@ -654,7 +645,6 @@ class AIPlannerClass:
         if baby_status.front_status == AroundStatus.is_wall or (
                 baby_location.robot_in_tile_center() and baby_location.blockChanged) \
                 or baby_cam.get_color() == GameColors.black:
-
             allChoice = []
             emptyChoice = []
             baby_location.blockChanged = False
@@ -678,7 +668,7 @@ class AIPlannerClass:
             if baby_status.right_status == AroundStatus.is_empty:
                 emptyChoice.append(MoveState.turnRight)
 
-            if baby_status.behind_status != AroundStatus.is_wall and \
+            if baby_status.behind_status != AroundStatus.is_wall and\
                     (baby_status.front_status == AroundStatus.is_wall
                      and baby_status.left_status == AroundStatus.is_wall
                      and baby_status.right_status == AroundStatus.is_wall):
@@ -707,14 +697,14 @@ class AIPlannerClass:
                             self.not_seen_tiles.add(tuple(baby_location.NextPosRight))
 
                         elif choice == MoveState.turnBack:
-                            # print("is back")
+                            print("is back")
                             self.not_seen_tiles.add(tuple(baby_location.NextPosBackward))
             elif len(self.not_seen_tiles) > 0:
                 target_tile = self.not_seen_tiles.pop()
                 baby_search_finder = ReturnPath(*target_tile)
                 self.ai_state = AIStates.not_seen_searching
-                # print("go to not seen section")
-                # print(baby_search_finder.get_best_path(baby_location.tilePosX, baby_location.tilePosY))
+                print("go to not seen section")
+                print(baby_search_finder.get_best_path(baby_location.tilePosX, baby_location.tilePosY))
             elif len(allChoice) > 0:
                 baby_controller.state = random.choice(allChoice)
 
@@ -725,7 +715,7 @@ class AIPlannerClass:
         pass
 
     def return_start_tile(self):
-        # print("in return section *************************************************************** ")
+        print("in return section *************************************************************** ")
         best_path = baby_finder.get_best_path(baby_location.tilePosX, baby_location.tilePosY)
 
         if baby_location.tilePosX == baby_location.startingTilePos[0] and baby_location.tilePosY == \
@@ -822,7 +812,7 @@ class AIPlannerClass:
         self.emitter.send(map_evaluate_request)
 
     def go_to_not_seen_tile(self):
-        # print("in go_to_not_seen_tile section *************************************************************** ")
+        print("in go_to_not_seen_tile section *************************************************************** ")
         best_path = baby_search_finder.get_best_path(baby_location.tilePosX, baby_location.tilePosY)
 
         if len(best_path) < 2:
@@ -876,34 +866,6 @@ class AIPlannerClass:
                 if dy == -1:
                     baby_controller.state = MoveState.turnLeft
 
-    def area_detection(self):
-
-        if baby_planner.area_number == 1:
-            if baby_cam.get_color() == GameColors.blue:
-                baby_planner.area_number = 2
-            if baby_cam.get_color() == GameColors.red:
-                baby_planner.area_number = 4
-
-        if baby_planner.area_number == 2:
-            if baby_cam.get_color() == GameColors.purple:
-                baby_planner.area_number = 3
-            if baby_cam.get_color() == GameColors.blue:
-                baby_planner.area_number = 1
-
-        if baby_planner.area_number == 3:
-            if baby_cam.get_color() == GameColors.red:
-                baby_planner.area_number = 4
-            if baby_cam.get_color() == GameColors.blue:
-                baby_planner.area_number = 2
-
-        if baby_planner.area_number == 4:
-            if baby_cam.get_color() == GameColors.purple:
-                baby_planner.area_number = 3
-            if baby_cam.get_color() == GameColors.green:
-                baby_planner.area_number = 1
-
-        print(f"area {baby_planner.area_number}")
-
 
 class CameraClass:
     def __init__(self, robot):
@@ -914,15 +876,62 @@ class CameraClass:
         self.rightCam.enable(timeStep)
         self.colorSensor.enable(timeStep)
         self.victim_positions = []
-        self.hsu_model_json = '{"class_name": "Sequential", "config": {"name": "sequential", "layers": [{"class_name": "InputLayer", "config": {"batch_input_shape": [null, 64, 40, 3], "dtype": "float32", "sparse": false, "ragged": false, "name": "input_1"}}, {"class_name": "Conv2D", "config": {"name": "conv2d", "trainable": true, "dtype": "float32", "filters": 64, "kernel_size": [3, 3], "strides": [1, 1], "padding": "valid", "data_format": "channels_last", "dilation_rate": [1, 1], "groups": 1, "activation": "relu", "use_bias": true, "kernel_initializer": {"class_name": "GlorotUniform", "config": {"seed": null}}, "bias_initializer": {"class_name": "Zeros", "config": {}}, "kernel_regularizer": null, "bias_regularizer": null, "activity_regularizer": null, "kernel_constraint": null, "bias_constraint": null}}, {"class_name": "MaxPooling2D", "config": {"name": "max_pooling2d", "trainable": true, "dtype": "float32", "pool_size": [2, 2], "padding": "valid", "strides": [2, 2], "data_format": "channels_last"}}, {"class_name": "Conv2D", "config": {"name": "conv2d_1", "trainable": true, "dtype": "float32", "filters": 64, "kernel_size": [3, 3], "strides": [1, 1], "padding": "valid", "data_format": "channels_last", "dilation_rate": [1, 1], "groups": 1, "activation": "relu", "use_bias": true, "kernel_initializer": {"class_name": "GlorotUniform", "config": {"seed": null}}, "bias_initializer": {"class_name": "Zeros", "config": {}}, "kernel_regularizer": null, "bias_regularizer": null, "activity_regularizer": null, "kernel_constraint": null, "bias_constraint": null}}, {"class_name": "MaxPooling2D", "config": {"name": "max_pooling2d_1", "trainable": true, "dtype": "float32", "pool_size": [2, 2], "padding": "valid", "strides": [2, 2], "data_format": "channels_last"}}, {"class_name": "Flatten", "config": {"name": "flatten", "trainable": true, "dtype": "float32", "data_format": "channels_last"}}, {"class_name": "Dropout", "config": {"name": "dropout", "trainable": true, "dtype": "float32", "rate": 0.5, "noise_shape": null, "seed": null}}, {"class_name": "Dense", "config": {"name": "dense", "trainable": true, "dtype": "float32", "units": 3, "activation": "softmax", "use_bias": true, "kernel_initializer": {"class_name": "GlorotUniform", "config": {"seed": null}}, "bias_initializer": {"class_name": "Zeros", "config": {}}, "kernel_regularizer": null, "bias_regularizer": null, "activity_regularizer": null, "kernel_constraint": null, "bias_constraint": null}}]}, "keras_version": "2.11.0", "backend": "tensorflow"}'
-        self.cfop_model_json = '{"class_name": "Sequential", "config": {"name": "sequential", "layers": [{"class_name": "InputLayer", "config": {"batch_input_shape": [null, 64, 40, 3], "dtype": "float32", "sparse": false, "ragged": false, "name": "input_1"}}, {"class_name": "Conv2D", "config": {"name": "conv2d", "trainable": true, "dtype": "float32", "filters": 64, "kernel_size": [3, 3], "strides": [1, 1], "padding": "valid", "data_format": "channels_last", "dilation_rate": [1, 1], "groups": 1, "activation": "relu", "use_bias": true, "kernel_initializer": {"class_name": "GlorotUniform", "config": {"seed": null}}, "bias_initializer": {"class_name": "Zeros", "config": {}}, "kernel_regularizer": null, "bias_regularizer": null, "activity_regularizer": null, "kernel_constraint": null, "bias_constraint": null}}, {"class_name": "MaxPooling2D", "config": {"name": "max_pooling2d", "trainable": true, "dtype": "float32", "pool_size": [2, 2], "padding": "valid", "strides": [2, 2], "data_format": "channels_last"}}, {"class_name": "Conv2D", "config": {"name": "conv2d_1", "trainable": true, "dtype": "float32", "filters": 64, "kernel_size": [3, 3], "strides": [1, 1], "padding": "valid", "data_format": "channels_last", "dilation_rate": [1, 1], "groups": 1, "activation": "relu", "use_bias": true, "kernel_initializer": {"class_name": "GlorotUniform", "config": {"seed": null}}, "bias_initializer": {"class_name": "Zeros", "config": {}}, "kernel_regularizer": null, "bias_regularizer": null, "activity_regularizer": null, "kernel_constraint": null, "bias_constraint": null}}, {"class_name": "MaxPooling2D", "config": {"name": "max_pooling2d_1", "trainable": true, "dtype": "float32", "pool_size": [2, 2], "padding": "valid", "strides": [2, 2], "data_format": "channels_last"}}, {"class_name": "Flatten", "config": {"name": "flatten", "trainable": true, "dtype": "float32", "data_format": "channels_last"}}, {"class_name": "Dropout", "config": {"name": "dropout", "trainable": true, "dtype": "float32", "rate": 0.5, "noise_shape": null, "seed": null}}, {"class_name": "Dense", "config": {"name": "dense", "trainable": true, "dtype": "float32", "units": 4, "activation": "softmax", "use_bias": true, "kernel_initializer": {"class_name": "GlorotUniform", "config": {"seed": null}}, "bias_initializer": {"class_name": "Zeros", "config": {}}, "kernel_regularizer": null, "bias_regularizer": null, "activity_regularizer": null, "kernel_constraint": null, "bias_constraint": null}}]}, "keras_version": "2.11.0", "backend": "tensorflow"}'
-        model_path = '/Users/parsa/Documents/GitHub/Ferdowsi-Erebus'
-        self.hsu_model: keras.models.Model = model_from_json(self.hsu_model_json)
-        self.hsu_model.load_weights(f"{model_path}/model_hsu.h5")
-        self.cfop_model: keras.models.Model = model_from_json(self.cfop_model_json)
-        self.cfop_model.load_weights(f"{model_path}/model_cfop.h5")
+        model_path = 'C:\\Users\\lenovo\\Documents\\Webot\\main'
+        self.hsu_model: tf.keras.models.Model = self.get_hsu_model()
+        self.hsu_model.load_weights(f"{model_path}\\model_hsu.h5")
+        self.cfop_model: tf.keras.models.Model = self.get_cfop_model()
+        self.cfop_model.load_weights(f"{model_path}\\model_cfop.h5")
         self.hsu_type = ['H', 'S', 'U']
         self.cfop_type = ['C', 'F', 'O', 'P']
+
+    def get_hsu_model(self):
+
+        IMG_SIZE = (224, 224)
+        IMG_SHAPE = IMG_SIZE + (3,)
+
+        base_model = tf.keras.applications.MobileNetV3Small(
+            input_shape=IMG_SHAPE,
+            include_top=False,
+            weights='imagenet')
+
+        preprocess_input = tf.keras.applications.mobilenet_v3.preprocess_input
+        base_model.trainable = False
+        inputs = tf.keras.Input(shape=IMG_SHAPE)
+        x = preprocess_input(inputs)
+        x = base_model(x, training=False)
+        x = tf.keras.layers.GlobalAveragePooling2D()(x)
+        x = tf.keras.layers.Dropout(.2)(x)
+        predictions = tf.keras.layers.Dense(3, activation='softmax')(x)
+
+        # this is the model we will train
+        model = tf.keras.Model(inputs=inputs, outputs=predictions)
+
+        return model
+
+    def get_cfop_model(self):
+
+        IMG_SIZE = (224, 224)
+        IMG_SHAPE = IMG_SIZE + (3,)
+
+        base_model = tf.keras.applications.MobileNetV3Small(
+            input_shape=IMG_SHAPE,
+            include_top=False,
+            weights='imagenet')
+
+        preprocess_input = tf.keras.applications.mobilenet_v3.preprocess_input
+
+        base_model.trainable = False
+        inputs = tf.keras.Input(shape=IMG_SHAPE)
+        x = preprocess_input(inputs)
+        x = base_model(x, training=False)
+        x = tf.keras.layers.GlobalAveragePooling2D()(x)
+        x = tf.keras.layers.Dropout(.2)(x)
+        predictions = tf.keras.layers.Dense(4, activation='softmax')(x)
+
+        # this is the model we will train
+        model = tf.keras.Model(inputs=inputs, outputs=predictions)
+
+        return model
 
     def color_distance(self, r1, g1, b1, r2, g2, b2):
         return ((r2 - r1) * 0.3) ** 2 + ((g2 - g1) * 0.59) ** 2 + ((b2 - b1) * 0.11) ** 2
@@ -1017,8 +1026,8 @@ class CameraClass:
         data_right = self.get_color_data(img2)
         type_left = self.check_type(data_left)
         type_right = self.check_type(data_right)
-        img1 = np.array([img1 / 255.0])
-        img2 = np.array([img2 / 250.0])
+        img1 = np.array([np.resize(img1,(224,224,3)) / 255.0])
+        img2 = np.array([np.resize(img2,(224,224,3))  / 250.0])
 
         if type_left == VictimTypes.victim and baby_status.s4.getValue() < 0.12:
 
@@ -1073,12 +1082,11 @@ baby_finder = ReturnPath(*baby_location.startingTilePos)
 baby_search_finder = ReturnPath(0, 0)
 
 while baby_robot.step(timeStep) != -1:
-    try:
-        # print(baby_controller.state)
+    # try:
+        print(baby_controller.state)
         baby_planner.plan()
-        # print(f"left: {baby_controller.leftWheelSpeed}, right: {baby_controller.rightWheelSpeed}")
+        print(f"S2: {baby_status.s2.getValue()}, S4: {baby_status.s4.getValue()}")
 
-
-    except:
-        pass
+    # except:
+    #     pass
     # print(baby_controller.state)
