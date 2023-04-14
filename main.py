@@ -92,8 +92,8 @@ class MapBonus:
     def set_map_floor(self, tileX, tileY, color: GameColors):
         if color != GameColors.other and (color == GameColors.green or baby_location.light_in_tile_center()):
             # if color != GameColors.green:
-                # print(
-                #     f"robot-tile : {baby_location.tilePosX, baby_location.tilePosY}, light-tile : {tileX, tileY} , color:{color}")
+            # print(
+            #     f"robot-tile : {baby_location.tilePosX, baby_location.tilePosY}, light-tile : {tileX, tileY} , color:{color}")
             x1 = tileX * 2
             x2 = tileX * 2 + 1
             y1 = tileY * 2
@@ -135,6 +135,7 @@ class LocationClass:
         self.NextPosBackward = (0, 0)
         self.stuckCounter = 0
         self.blockChanged = False
+        self.areaBlockChanged = False
         self.passedBlocksCounter = 0
         self.repeatedBlocksCounter = 0
         self.move_straight_error = 0.0
@@ -192,8 +193,10 @@ class LocationClass:
         self.NextPosLeft = self.get_next_pos_left()
         self.NextPosRight = self.get_next_pos_right()
         self.get_sub_area()
+
         if self.last_tile != (self.tilePosX, self.tilePosY):
             self.blockChanged = True
+            self.areaBlockChanged = True
             self.passedBlocksCounter += 1
         # set_game_map(self.lightXPos, self.lightXPos, colorControl.get_color())
 
@@ -398,7 +401,7 @@ class RobotControlClass:
             self.left_wheel.setVelocity(self.max_velocity * 0.3)
             self.right_wheel.setVelocity(-self.max_velocity * 0.3)
 
-            if abs((self.leftWheelPos + 4.42 / 2) - self.leftWheelPosSensor.getValue()) < .1:
+            if self.leftWheelPosSensor.getValue() > (self.leftWheelPos + 4.42 / 2):
                 self.turn_state = TurnState.not_started
                 self.state = MoveState.forward
 
@@ -412,7 +415,7 @@ class RobotControlClass:
             self.left_wheel.setVelocity(-self.max_velocity * 0.3)
             self.right_wheel.setVelocity(self.max_velocity * 0.3)
 
-            if abs((self.leftWheelPos - 4.42 / 2) - self.leftWheelPosSensor.getValue()) < .1:
+            if self.leftWheelPosSensor.getValue() < (self.leftWheelPos - 4.42 / 2):
                 self.turn_state = TurnState.not_started
                 self.state = MoveState.forward
 
@@ -426,7 +429,7 @@ class RobotControlClass:
             self.left_wheel.setVelocity(self.max_velocity * 0.3)
             self.right_wheel.setVelocity(-self.max_velocity * 0.3)
 
-            if abs((self.leftWheelPos + 4.42) - self.leftWheelPosSensor.getValue()) < .1:
+            if self.leftWheelPosSensor.getValue() > (self.leftWheelPos + 4.42):
                 self.turn_state = TurnState.not_started
                 self.state = MoveState.forward
 
@@ -473,7 +476,7 @@ class StatusClass:
         self.s6.enable(timeStep)
 
     def update_status(self):
-        if self.s1.getValue() > 0.08 and self.s5.getValue() > 0.03 and self.s6.getValue() > 0.03 :
+        if self.s1.getValue() > 0.08 and self.s5.getValue() > 0.03 and self.s6.getValue() > 0.03:
             if baby_location.is_tile_seen(baby_location.NextPosForward):
                 self.front_status = AroundStatus.is_seen
             else:
@@ -528,27 +531,33 @@ class ReturnPath:
             self.all_path.append(copy.copy(self.list_hazfi))
             self.list_hazfi.remove((x, y))
 
-        if 2 * y - 1 >= 0 and baby_location.map[2 * x + 1][2 * y + 1 - 2] == 1 and (x, y - 1) not in self.list_hazfi and \
+        if 2 * y - 1 >= 0 and (
+                baby_location.map[2 * x + 1][2 * y + 1 - 2] == 1 or (x == self.startx and y - 1 == self.starty)) and (
+                x, y - 1) not in self.list_hazfi and \
                 baby_location.map[2 * x + 1][2 * y + 1 - 1] != 2:
             self.list_hazfi.append((x, y))
             self.get_path(x, y - 1)
             self.list_hazfi.remove((x, y))
 
-        if 2 * y + 3 < self.map_size and baby_location.map[2 * x + 1][2 * y + 1 + 2] == 1 and (
+        if 2 * y + 3 < self.map_size and (
+                baby_location.map[2 * x + 1][2 * y + 1 + 2] == 1 or (x == self.startx and y + 1 == self.starty)) and (
                 x, y + 1) not in self.list_hazfi and \
                 baby_location.map[2 * x + 1][2 * y + 1 + 1] != 2:
             self.list_hazfi.append((x, y))
             self.get_path(x, y + 1)
             self.list_hazfi.remove((x, y))
 
-        if 2 * x - 1 >= 0 and baby_location.map[2 * x + 1 - 2][2 * y + 1] == 1 and (x - 1, y) not in self.list_hazfi and \
+        if 2 * x - 1 >= 0 and (
+                baby_location.map[2 * x + 1 - 2][2 * y + 1] == 1 or (x - 1 == self.startx and y == self.starty)) and (
+                x - 1, y) not in self.list_hazfi and \
                 baby_location.map[2 * x + 1 - 1][
                     2 * y + 1] != 2:
             self.list_hazfi.append((x, y))
             self.get_path(x - 1, y)
             self.list_hazfi.remove((x, y))
 
-        if 2 * x + 3 < self.map_size and baby_location.map[2 * x + 1 + 2][2 * y + 1] == 1 and \
+        if 2 * x + 3 < self.map_size and baby_location.map[2 * x + 1 + 2][2 * y + 1] == 1 or (
+                x + 1 == self.startx and y == self.starty) and \
                 (x + 1, y) not in self.list_hazfi and \
                 baby_location.map[2 * x + 1 + 1][2 * y + 1] != 2:
             self.list_hazfi.append((x, y))
@@ -585,6 +594,36 @@ class AIPlannerClass:
         self.score = 0
         self.remained_time = 1000
         self.initial_time = -1
+        self.area_number = 1
+
+    def area_detect(self):
+        if baby_location.areaBlockChanged:
+            # print(baby_cam.get_color())
+            baby_location.areaBlockChanged = False
+            if self.area_number == 1:
+                if baby_cam.get_color() == GameColors.blue:
+                    self.area_number = 2
+                elif baby_cam.get_color() == GameColors.green:
+                    self.area_number = 4
+
+            elif self.area_number == 2:
+                if baby_cam.get_color() == GameColors.blue:
+                    self.area_number = 1
+                elif baby_cam.get_color() == GameColors.purple:
+                    self.area_number = 3
+
+            elif self.area_number == 3:
+                if baby_cam.get_color() == GameColors.purple:
+                    self.area_number = 2
+                elif baby_cam.get_color() == GameColors.red:
+                    self.area_number = 4
+
+            elif self.area_number == 4:
+                if baby_cam.get_color() == GameColors.red:
+                    self.area_number = 3
+                elif baby_cam.get_color() == GameColors.green:
+                    self.area_number = 1
+            # print(f"area detected, {self.area_number}")
 
     def choose_state(self):
         if self.initial_time == -1:
@@ -596,6 +635,7 @@ class AIPlannerClass:
         #     self.ai_state = AIStates.wall_following
         else:
             self.ai_state = AIStates.returning
+        # baby_controller.state = MoveState.forward
 
     def plan(self):
         self.update_game_time_score()
@@ -603,6 +643,7 @@ class AIPlannerClass:
         baby_location.update_parameters()
         baby_cam.check_victim()
         baby_map_bonus.update_map()
+        self.area_detect()
         self.choose_state()
         if baby_controller.state != MoveState.stop:
 
@@ -668,7 +709,7 @@ class AIPlannerClass:
             if baby_status.right_status == AroundStatus.is_empty:
                 emptyChoice.append(MoveState.turnRight)
 
-            if baby_status.behind_status != AroundStatus.is_wall and\
+            if baby_status.behind_status != AroundStatus.is_wall and \
                     (baby_status.front_status == AroundStatus.is_wall
                      and baby_status.left_status == AroundStatus.is_wall
                      and baby_status.right_status == AroundStatus.is_wall):
@@ -879,10 +920,13 @@ class CameraClass:
         model_path = 'C:\\Users\\lenovo\\Documents\\Webot\\main'
         self.hsu_model: tf.keras.models.Model = self.get_hsu_model()
         self.hsu_model.load_weights(f"{model_path}\\model_hsu.h5")
+        self.model: tf.keras.models.Model = self.get_all_model()
+        self.model.load_weights(f"{model_path}\\model.h5")
         self.cfop_model: tf.keras.models.Model = self.get_cfop_model()
         self.cfop_model.load_weights(f"{model_path}\\model_cfop.h5")
         self.hsu_type = ['H', 'S', 'U']
         self.cfop_type = ['C', 'F', 'O', 'P']
+        self.all_type = ['C','F', 'H', 'O', 'P', 'S', 'U']
 
     def get_hsu_model(self):
 
@@ -972,6 +1016,7 @@ class CameraClass:
         tasvir_shart2 = False
         for i in range(len(data)):
             color = data[i][0][0]
+            value = data[i][0][2]
             per = data[i][1]
 
             if 90 <= color <= 100 and per > .80:
@@ -989,7 +1034,7 @@ class CameraClass:
             if 160 <= color <= 170 and per > .30:
                 tasvir_shart2 = True
 
-            # print(f"Color: {color}, Per: {per}")
+            print(f"Color: {data[i][0]}, Per: {per}")
 
         if harf_shart1 and harf_shart2:
             return VictimTypes.victim
@@ -1000,21 +1045,41 @@ class CameraClass:
         return VictimTypes.wall
 
     def get_color_data(self, sample_image):
+        #
+        # img = cv2.cvtColor(sample_image, cv2.COLOR_BGR2RGB)
+        # twoDimage = img.reshape((-1, 3))
+        # twoDimage = np.float32(twoDimage)
+        # criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 10, 1.0)
+        # K = 3
+        # attempts = 7
+        # ret, label, center = cv2.kmeans(twoDimage, K, None, criteria, attempts, cv2.KMEANS_PP_CENTERS)
+        # center = np.uint8(center)
+        # res = center[label.flatten()]
+        # result_image = res.reshape((img.shape))
+        # center1 = cv2.cvtColor(np.array([center]), cv2.COLOR_BGR2HSV)[0]
+        # data = []
+        # for i in range(K):
+        #     data.append((center1[i], result_image[(result_image == center[i])].size / result_image.size))
+        # return data
 
-        img = cv2.cvtColor(sample_image, cv2.COLOR_BGR2RGB)
-        twoDimage = img.reshape((-1, 3))
-        twoDimage = np.float32(twoDimage)
+        # Load the image
+
+        pixel_values = sample_image.reshape((-1, 3))
+        pixel_values = np.float32(pixel_values)
+
+        k = 3
+
         criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 10, 1.0)
-        K = 3
-        attempts = 7
-        ret, label, center = cv2.kmeans(twoDimage, K, None, criteria, attempts, cv2.KMEANS_PP_CENTERS)
-        center = np.uint8(center)
-        res = center[label.flatten()]
-        result_image = res.reshape((img.shape))
-        center1 = cv2.cvtColor(np.array([center]), cv2.COLOR_BGR2HSV)[0]
+
+        _, labels, centers = cv2.kmeans(pixel_values, k, None, criteria, 10, cv2.KMEANS_RANDOM_CENTERS)
+
+        centers = np.uint8(centers)
+
+        output = centers[labels.flatten()]
+        hsv = cv2.cvtColor(np.array([centers]), cv2.COLOR_RGB2HSV)[0]
         data = []
-        for i in range(K):
-            data.append((center1[i], result_image[(result_image == center[i])].size / result_image.size))
+        for i in range(k):
+            data.append((hsv[i], output[(output == centers[i])].size / output.size))
         return data
 
     def check_victim(self):
@@ -1024,46 +1089,87 @@ class CameraClass:
             return
         data_left = self.get_color_data(img1)
         data_right = self.get_color_data(img2)
+        print("check left ")
         type_left = self.check_type(data_left)
+        print("check right ")
         type_right = self.check_type(data_right)
-        img1 = np.array([np.resize(img1,(224,224,3))])
-        img2 = np.array([np.resize(img2,(224,224,3))])
-
-        if type_left == VictimTypes.victim and baby_status.s4.getValue() < 0.12:
-
+        img1 = np.array([np.resize(img1, (224, 224, 3))])
+        img2 = np.array([np.resize(img2, (224, 224, 3))])
+        if type_left != VictimTypes.wall:
             if baby_controller.stopCounter == 0:
                 baby_controller.dont_move()
 
             if baby_controller.stopFlag:
-                baby_planner.send_victim(self.hsu_type[np.argmax(self.hsu_model.predict(img1)[0])])
+                baby_planner.send_victim(self.all_type[np.argmax(self.model.predict(img1)[0])])
                 self.victim_positions.append((baby_location.tilePosX, baby_location.tilePosY))
 
-        if type_right == VictimTypes.victim and baby_status.s2.getValue() < 0.12:
-
+        if type_right != VictimTypes.wall:
             if baby_controller.stopCounter == 0:
                 baby_controller.dont_move()
 
             if baby_controller.stopFlag:
-                baby_planner.send_victim(self.hsu_type[np.argmax(self.hsu_model.predict(img2)[0])])
+                baby_planner.send_victim(self.all_type[np.argmax(self.model.predict(img2)[0])])
                 self.victim_positions.append((baby_location.tilePosX, baby_location.tilePosY))
 
-        if type_left == VictimTypes.sign and baby_status.s4.getValue() < 0.12:
+        # if type_left == VictimTypes.victim and baby_status.s4.getValue() < 0.12:
+        #
+        #     if baby_controller.stopCounter == 0:
+        #         baby_controller.dont_move()
+        #
+        #     if baby_controller.stopFlag:
+        #         baby_planner.send_victim(self.hsu_type[np.argmax(self.hsu_model.predict(img1)[0])])
+        #         self.victim_positions.append((baby_location.tilePosX, baby_location.tilePosY))
+        #
+        # if type_right == VictimTypes.victim and baby_status.s2.getValue() < 0.12:
+        #
+        #     if baby_controller.stopCounter == 0:
+        #         baby_controller.dont_move()
+        #
+        #     if baby_controller.stopFlag:
+        #         baby_planner.send_victim(self.hsu_type[np.argmax(self.hsu_model.predict(img2)[0])])
+        #         self.victim_positions.append((baby_location.tilePosX, baby_location.tilePosY))
+        #
+        # if type_left == VictimTypes.sign and baby_status.s4.getValue() < 0.12:
+        #
+        #     if baby_controller.stopCounter == 0:
+        #         baby_controller.dont_move()
+        #
+        #     if baby_controller.stopFlag:
+        #         baby_planner.send_victim(self.cfop_type[np.argmax(self.cfop_model.predict(img1)[0])])
+        #         self.victim_positions.append((baby_location.tilePosX, baby_location.tilePosY))
+        #
+        # if type_right == VictimTypes.sign and baby_status.s2.getValue() < 0.12:
+        #
+        #     if baby_controller.stopCounter == 0:
+        #         baby_controller.dont_move()
+        #
+        #     if baby_controller.stopFlag:
+        #         baby_planner.send_victim(self.cfop_type[np.argmax(self.cfop_model.predict(img2)[0])])
+        #         self.victim_positions.append((baby_location.tilePosX, baby_location.tilePosY))
 
-            if baby_controller.stopCounter == 0:
-                baby_controller.dont_move()
+    def get_all_model(self):
+        IMG_SIZE = (224, 224)
+        IMG_SHAPE = IMG_SIZE + (3,)
 
-            if baby_controller.stopFlag:
-                baby_planner.send_victim(self.cfop_type[np.argmax(self.cfop_model.predict(img1)[0])])
-                self.victim_positions.append((baby_location.tilePosX, baby_location.tilePosY))
+        base_model = tf.keras.applications.MobileNetV3Small(
+            input_shape=IMG_SHAPE,
+            include_top=False,
+            weights='imagenet')
 
-        if type_right == VictimTypes.sign and baby_status.s2.getValue() < 0.12:
+        preprocess_input = tf.keras.applications.mobilenet_v3.preprocess_input
 
-            if baby_controller.stopCounter == 0:
-                baby_controller.dont_move()
+        base_model.trainable = False
+        inputs = tf.keras.Input(shape=IMG_SHAPE)
+        x = preprocess_input(inputs)
+        x = base_model(x, training=False)
+        x = tf.keras.layers.GlobalAveragePooling2D()(x)
+        x = tf.keras.layers.Dropout(.2)(x)
+        predictions = tf.keras.layers.Dense(7, activation='softmax')(x)
 
-            if baby_controller.stopFlag:
-                baby_planner.send_victim(self.cfop_type[np.argmax(self.cfop_model.predict(img2)[0])])
-                self.victim_positions.append((baby_location.tilePosX, baby_location.tilePosY))
+        # this is the model we will train
+        model = tf.keras.Model(inputs=inputs, outputs=predictions)
+
+        return model
 
 
 timeStep = 32
@@ -1083,10 +1189,9 @@ baby_search_finder = ReturnPath(0, 0)
 
 while baby_robot.step(timeStep) != -1:
     # try:
-        print(baby_controller.state)
-        baby_planner.plan()
-        print(f"S2: {baby_status.s2.getValue()}, S4: {baby_status.s4.getValue()}")
+    #     print(baby_controller.state)
+    baby_planner.plan()
 
-    # except:
-    #     pass
-    # print(baby_controller.state)
+# except:
+#     pass
+# print(baby_controller.state)

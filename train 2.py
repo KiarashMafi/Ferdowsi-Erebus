@@ -15,7 +15,7 @@ generator = tf.keras.preprocessing.image.ImageDataGenerator(
     height_shift_range=0.2,
     preprocessing_function= preprocess_input
 ).flow_from_directory(
-    directory='train_1',
+    directory='train',
     target_size=(224, 224),  # resize to this size
     color_mode="rgb",
     class_mode="categorical",
@@ -41,13 +41,13 @@ inputs = tf.keras.Input(shape=IMG_SHAPE)
 x = base_model(inputs, training=False)
 x = tf.keras.layers.GlobalAveragePooling2D()(x)
 x = tf.keras.layers.Dropout(.2)(x)
-predictions = tf.keras.layers.Dense(4, activation='softmax')(x)
+predictions = tf.keras.layers.Dense(7, activation='softmax')(x)
 
 # this is the model we will train
 model = tf.keras.Model(inputs=inputs, outputs=predictions)
 model.compile(optimizer='sgd', loss="categorical_crossentropy", metrics=['accuracy'])
-h = model.fit(generator, epochs=100,)
-model.save("model_cfop.h5")
+h = model.fit(generator, epochs=50,)
+model.save("model.h5")
 # model.save("model_hsu.h5")
 plt.plot(h.history['accuracy'])
 plt.plot(h.history['loss'])
@@ -56,5 +56,5 @@ plt.ylabel('accuracy')
 plt.xlabel('epoch')
 plt.legend(['accuracy', 'loss'], loc='upper left')
 plt.show()
-model.load_weights("model_cfop.h5")
+model.load_weights("model.h5")
 # model.load_weights("model_hsu.h5")
