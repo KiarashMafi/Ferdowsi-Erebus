@@ -376,10 +376,15 @@ class RobotControlClass:
         e = min(e, .3)
         er = 0
         el = 0
-        if baby_status.s2.getValue() < .03:
-            er = .003 / baby_status.s2.getValue()
-        if baby_status.s4.getValue() < .03:
-            el = .003 / baby_status.s4.getValue()
+
+        if .04 < baby_status.s2.getValue() < .13:
+            el = 1
+            er = .5
+
+        if .04 < baby_status.s4.getValue() < .13:
+            er = 1
+            el = .5
+
         self.leftWheelSpeed = self.max_velocity * .8 - e + er
         self.rightWheelSpeed = self.max_velocity * .8 + e + el
         self.left_wheel.setVelocity(self.leftWheelSpeed)
@@ -398,7 +403,6 @@ class RobotControlClass:
             if abs((self.leftWheelPos + 4.42 / 2) - self.leftWheelPosSensor.getValue()) < .1:
                 self.turn_state = TurnState.not_started
                 self.state = MoveState.forward
-                print("turn left done")
 
     def turn_right(self):
         baby_location.history.clear()
@@ -413,7 +417,6 @@ class RobotControlClass:
             if abs((self.leftWheelPos - 4.42 / 2) - self.leftWheelPosSensor.getValue()) < .1:
                 self.turn_state = TurnState.not_started
                 self.state = MoveState.forward
-                print("turn right done")
 
     def turn_back(self):
         baby_location.history.clear()
@@ -428,7 +431,6 @@ class RobotControlClass:
             if abs((self.leftWheelPos + 4.42) - self.leftWheelPosSensor.getValue()) < .1:
                 self.turn_state = TurnState.not_started
                 self.state = MoveState.forward
-                print("turn back done")
 
     def move_back(self):
         baby_location.history.clear()
@@ -436,7 +438,6 @@ class RobotControlClass:
         rightWheelSpeed = -self.max_velocity
         self.left_wheel.setVelocity(leftWheelSpeed)
         self.right_wheel.setVelocity(rightWheelSpeed)
-        print("PEDARET")
 
     def stop(self):
         self.stopCounter += 1
@@ -643,14 +644,14 @@ class AIPlannerClass:
 
             return
 
-        if (baby_status.front_status == AroundStatus.is_wall or (
-                baby_location.robot_in_tile_center() and baby_location.blockChanged)
-                or baby_cam.get_color() == GameColors.black) and baby_cam.get_color():
-            print("Out of swamp")
+        if baby_status.front_status == AroundStatus.is_wall or (
+                baby_location.robot_in_tile_center() and baby_location.blockChanged) \
+                or baby_cam.get_color() == GameColors.black:
             allChoice = []
             emptyChoice = []
             baby_location.blockChanged = False
             baby_location.stuckCounter = 0
+
             if baby_status.front_status != AroundStatus.is_wall and baby_cam.get_color() != GameColors.black:
                 allChoice.append(MoveState.forward)
 
@@ -669,8 +670,19 @@ class AIPlannerClass:
             if baby_status.right_status == AroundStatus.is_empty:
                 emptyChoice.append(MoveState.turnRight)
 
-            if baby_status.behind_status != AroundStatus.is_wall and baby_status.front_status == AroundStatus.is_wall:
+            if baby_status.behind_status != AroundStatus.is_wall and\
+                    (baby_status.front_status == AroundStatus.is_wall
+                     and baby_status.left_status == AroundStatus.is_wall
+                     and baby_status.right_status == AroundStatus.is_wall):
                 allChoice.append(MoveState.turnBack)
+
+            if baby_status.left_status == AroundStatus.is_seen and baby_status.right_status == AroundStatus.is_seen \
+                    and baby_status.front_status != AroundStatus.is_wall:
+                baby_controller.state = MoveState.forward
+
+            if baby_status.left_status == AroundStatus.is_seen and baby_status.right_status == AroundStatus.is_seen \
+                    and baby_status.front_status == AroundStatus.is_wall:
+                baby_controller.state = MoveState.turnBack
 
             if len(emptyChoice) > 0:
                 baby_controller.state = random.choice(emptyChoice)
@@ -697,6 +709,7 @@ class AIPlannerClass:
                 print(baby_search_finder.get_best_path(baby_location.tilePosX, baby_location.tilePosY))
             elif len(allChoice) > 0:
                 baby_controller.state = random.choice(allChoice)
+
             else:
                 baby_controller.state = MoveState.forward
 
@@ -971,7 +984,7 @@ class CameraClass:
         img1 = np.array([img1 / 255.0])
         img2 = np.array([img2 / 250.0])
 
-        if type_left == VictimTypes.victim and baby_status.s4.getValue() < 0.1:
+        if type_left == VictimTypes.victim and baby_status.s4.getValue() < 0.12:
 
             if baby_controller.stopCounter == 0:
                 baby_controller.dont_move()
@@ -980,7 +993,7 @@ class CameraClass:
                 baby_planner.send_victim(self.hsu_type[np.argmax(self.hsu_model.predict(img1)[0])])
                 self.victim_positions.append((baby_location.tilePosX, baby_location.tilePosY))
 
-        if type_right == VictimTypes.victim and baby_status.s2.getValue() < 0.1:
+        if type_right == VictimTypes.victim and baby_status.s2.getValue() < 0.12:
 
             if baby_controller.stopCounter == 0:
                 baby_controller.dont_move()
@@ -989,7 +1002,7 @@ class CameraClass:
                 baby_planner.send_victim(self.hsu_type[np.argmax(self.hsu_model.predict(img2)[0])])
                 self.victim_positions.append((baby_location.tilePosX, baby_location.tilePosY))
 
-        if type_left == VictimTypes.sign and baby_status.s4.getValue() < 0.1:
+        if type_left == VictimTypes.sign and baby_status.s4.getValue() < 0.12:
 
             if baby_controller.stopCounter == 0:
                 baby_controller.dont_move()
@@ -998,7 +1011,7 @@ class CameraClass:
                 baby_planner.send_victim(self.cfop_type[np.argmax(self.cfop_model.predict(img1)[0])])
                 self.victim_positions.append((baby_location.tilePosX, baby_location.tilePosY))
 
-        if type_right == VictimTypes.sign and baby_status.s2.getValue() < 0.1:
+        if type_right == VictimTypes.sign and baby_status.s2.getValue() < 0.12:
 
             if baby_controller.stopCounter == 0:
                 baby_controller.dont_move()
@@ -1027,7 +1040,7 @@ while baby_robot.step(timeStep) != -1:
     try:
         print(baby_controller.state)
         baby_planner.plan()
-        print(f"left: {baby_controller.leftWheelSpeed}, right: {baby_controller.rightWheelSpeed}")
+        print(f"S2: {baby_status.s2.getValue()}, S4: {baby_status.s4.getValue()}")
 
     except:
         pass
