@@ -1026,8 +1026,8 @@ class CameraClass:
         data_right = self.get_color_data(img2)
         type_left = self.check_type(data_left)
         type_right = self.check_type(data_right)
-        img1 = np.array([np.resize(img1,(224,224,3)) / 255.0])
-        img2 = np.array([np.resize(img2,(224,224,3))  / 250.0])
+        img1 = np.array([np.resize(img1,(224,224,3))])
+        img2 = np.array([np.resize(img2,(224,224,3))])
 
         if type_left == VictimTypes.victim and baby_status.s4.getValue() < 0.12:
 
