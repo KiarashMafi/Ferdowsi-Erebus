@@ -421,6 +421,7 @@ class RobotControlClass:
             er = .1
             el = .05
 
+
         self.leftWheelSpeed = self.max_velocity * .8 - e + er
         self.rightWheelSpeed = self.max_velocity * .8 + e + el
         self.left_wheel.setVelocity(self.leftWheelSpeed)
@@ -569,8 +570,8 @@ class StatusClass:
         else:
             self.behind_status = AroundStatus.is_wall
 
-        print(f"Front status: {self.front_status}, Right status: {self.right_status}, Left status: {self.left_status}"
-              f", Behind status: {self.behind_status}")
+        # print(f"Front status: {self.front_status}, Right status: {self.right_status}, Left status: {self.left_status}"
+        #       f", Behind status: {self.behind_status}")
 
 
 class ReturnPath:
@@ -639,6 +640,7 @@ class ReturnPath:
             if len(path) < len(best_path):
                 best_path = path
 
+
         return best_path
 
 
@@ -686,6 +688,8 @@ class AIPlannerClass:
                     self.area_number = 1
 
     def choose_state(self):
+        if self.ai_state == AIStates.not_seen_searching:
+            return
         if self.initial_time == -1:
             self.ai_state = AIStates.random_searching
             return
@@ -806,6 +810,7 @@ class AIPlannerClass:
                 target_tile = self.not_seen_tiles.pop()
                 baby_search_finder = ReturnPath(*target_tile)
                 self.ai_state = AIStates.not_seen_searching
+                print(f"Target tile: {target_tile}, Current coordinate: {(baby_location.tilePosX, baby_location.tilePosY)}")
                 print(baby_search_finder.get_best_path(baby_location.tilePosX, baby_location.tilePosY))
             elif len(allChoice) > 0:
                 baby_controller.state = random.choice(allChoice)
@@ -813,7 +818,7 @@ class AIPlannerClass:
             else:
                 baby_controller.state = MoveState.forward
 
-            # print(f"Empty choices: {emptyChoice}")
+            print(f"Empty choices: {emptyChoice}")
 
     def wall_follow(self):
         error_right = 0
@@ -946,23 +951,29 @@ class AIPlannerClass:
 
         if len(best_path) < 2:
             self.ai_state = AIStates.random_searching
+            return
 
         p1 = best_path[0]
         p2 = best_path[1]
         dx = p2[0] - p1[0]
         dy = p2[1] - p1[1]
 
-        if baby_location.robot_in_tile_center() and baby_location.blockChanged:
+        if baby_location.robot_in_tile_center():
             baby_location.blockChanged = False
+            print(f"Direction: {baby_location.direction}")
 
             if baby_location.direction == Direction.up:
                 if dx == 1:
+                    print(1)
                     baby_controller.state = MoveState.turnRight
                 if dx == -1:
+                    print(2)
                     baby_controller.state = MoveState.turnLeft
                 if dy == 1:
+                    print(3)
                     baby_controller.state = MoveState.turnBack
                 if dy == -1:
+                    print(4)
                     baby_controller.state = MoveState.forward
 
             if baby_location.direction == Direction.down:
@@ -1272,8 +1283,8 @@ baby_search_finder = ReturnPath(0, 0)
 
 while baby_robot.step(timeStep) != -1:
     # try:
+    print(f"Forward: {baby_status.front_status}, Right: {baby_status.right_status}, Left: {baby_status.left_status}, Back: {baby_status.behind_status}")
     baby_planner.plan()
-    # print(f"State: {baby_controller.state}")
 
 # except:
 #     pass
