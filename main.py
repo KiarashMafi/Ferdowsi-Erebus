@@ -7,8 +7,15 @@ import numpy as np
 import cv2
 from controller import Robot, DistanceSensor, PositionSensor, GPS, Camera
 import tensorflow as tf
+from PIL import Image
 
 ROBOT_RADIUS = .04
+
+
+def save_image(array: np.ndarray):
+    name = f"D:\\mojef\\Ferdowsi-Erebus\\train\\{random.randint(0, 1000)}.png"
+    im = Image.fromarray(array.astype(np.uint8))
+    im.save(name)
 
 
 # enums
@@ -26,8 +33,7 @@ class GameColors(Enum):
 
 class VictimTypes(Enum):
     wall = 0
-    victim = 1
-    sign = 2
+    sign_or_victim = 1
 
 
 class MoveState(Enum):
@@ -379,12 +385,12 @@ class RobotControlClass:
         el = 0
 
         if .04 < baby_status.s2.getValue() < .13:
-            el = 1
-            er = .5
+            el = .1
+            er = .05
 
         if .04 < baby_status.s4.getValue() < .13:
-            er = 1
-            el = .5
+            er = .1
+            el = .05
 
         self.leftWheelSpeed = self.max_velocity * .8 - e + er
         self.rightWheelSpeed = self.max_velocity * .8 + e + el
@@ -917,16 +923,16 @@ class CameraClass:
         self.rightCam.enable(timeStep)
         self.colorSensor.enable(timeStep)
         self.victim_positions = []
-        model_path = 'C:\\Users\\lenovo\\Documents\\Webot\\main'
-        self.hsu_model: tf.keras.models.Model = self.get_hsu_model()
-        self.hsu_model.load_weights(f"{model_path}\\model_hsu.h5")
+        model_path = 'D:\\mojef\\Ferdowsi-Erebus'
+        # self.hsu_model: tf.keras.models.Model = self.get_hsu_model()
+        # self.hsu_model.load_weights(f"{model_path}\\model_hsu.h5")
         self.model: tf.keras.models.Model = self.get_all_model()
         self.model.load_weights(f"{model_path}\\model.h5")
-        self.cfop_model: tf.keras.models.Model = self.get_cfop_model()
-        self.cfop_model.load_weights(f"{model_path}\\model_cfop.h5")
+        # self.cfop_model: tf.keras.models.Model = self.get_cfop_model()
+        # self.cfop_model.load_weights(f"{model_path}\\model_cfop.h5")
         self.hsu_type = ['H', 'S', 'U']
         self.cfop_type = ['C', 'F', 'O', 'P']
-        self.all_type = ['C','F', 'H', 'O', 'P', 'S', 'U']
+        self.all_type = ['C', 'F', 'H', 'O', 'P', 'S', 'U']
 
     def get_hsu_model(self):
 
@@ -1004,45 +1010,27 @@ class CameraClass:
 
     def capture(self):
         img1 = np.array(self.leftCam.getImageArray()).astype(
-            np.float32)
+            np.float32).reshape((40, 64, 3))
         img2 = np.array(self.rightCam.getImageArray()).astype(
-            np.float32)
+            np.float32).reshape((40, 64, 3))
         return img1, img2
 
     def check_type(self, data):
-        harf_shart1 = False
-        harf_shart2 = False
-        tasvir_shart1 = False
-        tasvir_shart2 = False
+        back_per = 0
+        sky = 0
         for i in range(len(data)):
             color = data[i][0][0]
             value = data[i][0][2]
             per = data[i][1]
 
-            if 90 <= color <= 100 and per > .80:
-                return VictimTypes.wall
+            if 80 <= color <= 120:
+                back_per += per
+            if 105 <= color <= 120:
+                sky += per
+        if back_per >= .65 or sky >= .20:
+            return VictimTypes.wall
 
-            if 80 <= color <= 100 and per < .40:
-                harf_shart1 = True
-
-            if 0 <= color <= 10 and per > .55:
-                harf_shart2 = True
-
-            if 25 <= color <= 50 and per > .20:
-                tasvir_shart1 = True
-
-            if 160 <= color <= 170 and per > .30:
-                tasvir_shart2 = True
-
-            print(f"Color: {data[i][0]}, Per: {per}")
-
-        if harf_shart1 and harf_shart2:
-            return VictimTypes.victim
-
-        if tasvir_shart1 or tasvir_shart2:
-            return VictimTypes.sign
-
-        return VictimTypes.wall
+        return VictimTypes.sign_or_victim
 
     def get_color_data(self, sample_image):
         #
@@ -1085,33 +1073,41 @@ class CameraClass:
     def check_victim(self):
 
         img1, img2 = self.capture()
+        # save_image(img1)
+        # save_image(img2)
         if (baby_location.tilePosX, baby_location.tilePosY) in self.victim_positions:
             return
         data_left = self.get_color_data(img1)
         data_right = self.get_color_data(img2)
-        print("check left ")
         type_left = self.check_type(data_left)
-        print("check right ")
         type_right = self.check_type(data_right)
-        img1 = np.array([np.resize(img1, (224, 224, 3))])
-        img2 = np.array([np.resize(img2, (224, 224, 3))])
-        if type_left != VictimTypes.wall:
+        # img1 = cv2.resize(img1, dsize=(224, 224), interpolation=cv2.INTER_CUBIC)
+        # img2 = cv2.resize(img2, dsize=(224, 224), interpolation=cv2.INTER_CUBIC)
+        # img1 = np.array([np.resize(img1, (224, 224, 3))])
+        # img2 = np.array([np.resize(img2, (224, 224, 3))])
+        img1 = np.array([tf.keras.preprocessing.image.smart_resize(img1, (224, 224), interpolation='bilinear')])
+        img2 = np.array([tf.keras.preprocessing.image.smart_resize(img2, (224, 224), interpolation='bilinear')])
+        if type_left != VictimTypes.wall and baby_status.s2.getValue() < 0.12:
             if baby_controller.stopCounter == 0:
                 baby_controller.dont_move()
 
             if baby_controller.stopFlag:
+                print(data_left)
+                save_image(img1[0])
                 baby_planner.send_victim(self.all_type[np.argmax(self.model.predict(img1)[0])])
                 self.victim_positions.append((baby_location.tilePosX, baby_location.tilePosY))
 
-        if type_right != VictimTypes.wall:
+        if type_right != VictimTypes.wall and baby_status.s4.getValue() < 0.12:
             if baby_controller.stopCounter == 0:
                 baby_controller.dont_move()
 
             if baby_controller.stopFlag:
+                print(data_right)
+                save_image(img2[0])
                 baby_planner.send_victim(self.all_type[np.argmax(self.model.predict(img2)[0])])
                 self.victim_positions.append((baby_location.tilePosX, baby_location.tilePosY))
 
-        # if type_left == VictimTypes.victim and baby_status.s4.getValue() < 0.12:
+        # if type_left == VictimTypes.victim  :
         #
         #     if baby_controller.stopCounter == 0:
         #         baby_controller.dont_move()
