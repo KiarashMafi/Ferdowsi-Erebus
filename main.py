@@ -8,7 +8,7 @@ import cv2
 from controller import Robot, DistanceSensor, PositionSensor, GPS, Camera
 import tensorflow as tf
 from PIL import Image
-
+import pprint
 ROBOT_RADIUS = .04
 
 
@@ -23,12 +23,12 @@ class GameColors(Enum):
     other = 0
     black = 2
     orange = 3
-    gray = 4
-    green = 5
+    silver = 4
+    start_tile = 5
     blue = 6
     purple = 7
     red = 8
-    silver = 9
+    green = 9
 
 
 class VictimTypes(Enum):
@@ -80,12 +80,27 @@ class MapBonus:
         self.update_walls()
         self.update_floors()
 
+    def update_victim(self, victim_type, side: Direction):
+        current_loc = (baby_location.tilePosX, baby_location.tilePosY)
+
+        if side == Direction.left:
+            self.set_map_victim(baby_location.NextPosLeft, current_loc, victim_type)
+        if side == Direction.right:
+            self.set_map_victim(baby_location.NextPosRight, current_loc, victim_type)
+
     def update_walls(self):
-        pass
+        if baby_location.robot_in_tile_center() and baby_controller.state == MoveState.forward:
+            current_loc = (baby_location.tilePosX, baby_location.tilePosY)
+            if baby_status.left_status == AroundStatus.is_wall:
+                self.set_map_wall(baby_location.NextPosLeft, current_loc)
+            if baby_status.right_status == AroundStatus.is_wall:
+                self.set_map_wall(baby_location.NextPosRight, current_loc)
+            if baby_status.front_status == AroundStatus.is_wall:
+                self.set_map_wall_forward(baby_location.NextPosForward, current_loc)
 
     def fill_start_tile(self):
         x, y = baby_location.startingTilePos
-        self.set_map_floor(x, y, GameColors.green)
+        self.set_map_floor(x, y, GameColors.start_tile)
 
     def update_floors(self):
         self.fill_start_tile()
@@ -97,8 +112,8 @@ class MapBonus:
             # print(f"color : {color} : {x, y}")
 
     def set_map_floor(self, tileX, tileY, color: GameColors):
-        if color != GameColors.other and (color == GameColors.green or baby_location.light_in_tile_center()):
-            # if color != GameColors.green:
+        if color != GameColors.other and (color == GameColors.start_tile or baby_location.light_in_tile_center()):
+            # if color != GameColors.start_tile:
             # print(
             #     f"robot-tile : {baby_location.tilePosX, baby_location.tilePosY}, light-tile : {tileX, tileY} , color:{color}")
             x1 = tileX * 2
@@ -112,6 +127,58 @@ class MapBonus:
 
     def fill_map_bonus_color(self, x_small_tile, y_small_tile, color: GameColors):
         self.map[2 * x_small_tile + 1][2 * y_small_tile + 1] = str(color.value)
+
+    def safe_fill_wall(self, x, y):
+        if self.map[x][y] == 0:
+            self.map[x][y] = 1
+
+    def set_map_victim(self, next_tile, current_tile, type):
+        if baby_location.direction in [Direction.left, Direction.right]:
+            y = 2 * (next_tile[1] + current_tile[1] + 1)
+            x = 4 * current_tile[0]
+            self.map[x + 1][y] = type
+            self.map[x + 3][y] = type
+        if baby_location.direction in [Direction.up, Direction.down]:
+            x = 2 * (next_tile[0] + current_tile[0] + 1)
+            y = 4 * current_tile[1]
+            self.map[x][y + 1] = type
+            self.map[x][y + 3] = type
+
+    def set_map_wall(self, next_tile, current_tile):
+        if baby_location.direction in [Direction.left, Direction.right]:
+            y = 2 * (next_tile[1] + current_tile[1] + 1)
+            x = 4 * current_tile[0]
+            self.safe_fill_wall(x, y)
+            self.safe_fill_wall(x + 1, y)
+            self.safe_fill_wall(x + 2, y)
+            self.safe_fill_wall(x + 3, y)
+            self.safe_fill_wall(x + 4, y)
+        if baby_location.direction in [Direction.up, Direction.down]:
+            x = 2 * (next_tile[0] + current_tile[0] + 1)
+            y = 4 * current_tile[1]
+            self.safe_fill_wall(x, y)
+            self.safe_fill_wall(x, y + 1)
+            self.safe_fill_wall(x, y + 2)
+            self.safe_fill_wall(x, y + 3)
+            self.safe_fill_wall(x, y + 4)
+
+    def set_map_wall_forward(self, next_tile, current_tile):
+        if baby_location.direction in [Direction.up, Direction.down]:
+            y = 2 * (next_tile[1] + current_tile[1] + 1)
+            x = 4 * current_tile[0]
+            self.safe_fill_wall(x, y)
+            self.safe_fill_wall(x + 1, y)
+            self.safe_fill_wall(x + 2, y)
+            self.safe_fill_wall(x + 3, y)
+            self.safe_fill_wall(x + 4, y)
+        if baby_location.direction in [Direction.left, Direction.right]:
+            x = 2 * (next_tile[0] + current_tile[0] + 1)
+            y = 4 * current_tile[1]
+            self.safe_fill_wall(x, y)
+            self.safe_fill_wall(x, y + 1)
+            self.safe_fill_wall(x, y + 2)
+            self.safe_fill_wall(x, y + 3)
+            self.safe_fill_wall(x, y + 4)
 
 
 # Control Classes
@@ -381,9 +448,12 @@ class RobotControlClass:
         self.stopFlag = False
 
     def move_forward(self):
-        e = baby_location.move_straight_error * 500
-        e = max(e, -.5)
-        e = min(e, .5)
+        e = 0
+        if baby_planner.area_number != 4:
+            e = baby_location.move_straight_error * 500
+            e = max(e, -.5)
+            e = min(e, .5)
+
         er = 0
         el = 0
         dist = .035
@@ -656,11 +726,11 @@ class AIPlannerClass:
             # print(f"area detected, {self.area_number}")
 
     def choose_state(self):
-        print(self.remained_time , self.initial_time)
+        print(self.remained_time / self.initial_time)
         if self.initial_time == -1:
             self.ai_state = AIStates.random_searching
             return
-        if self.remained_time / self.initial_time > .8 :
+        if self.remained_time / self.initial_time > .8:
             self.ai_state = AIStates.random_searching
         # elif self.remained_time / self.initial_time > .3:
         #     self.ai_state = AIStates.wall_following
@@ -787,21 +857,21 @@ class AIPlannerClass:
         pass
 
     def return_start_tile(self):
-        print("in return section *************************************************************** ")
         best_path = baby_finder.get_best_path(baby_location.tilePosX, baby_location.tilePosY)
-
+        print(best_path)
         if baby_location.tilePosX == baby_location.startingTilePos[0] and baby_location.tilePosY == \
                 baby_location.startingTilePos[1] and baby_location.robot_in_tile_center():
             self.send_finish()
 
-        if len(best_path) < 2:
+        if len(
+                best_path) < 2 or baby_status.front_status == AroundStatus.is_wall or baby_location.direction == Direction.not_initialized:
+            self.random_search()
             return
 
         p1 = best_path[0]
         p2 = best_path[1]
         dx = p2[0] - p1[0]
         dy = p2[1] - p1[1]
-
         if baby_location.robot_in_tile_center() and baby_location.blockChanged:
             baby_location.blockChanged = False
 
@@ -852,6 +922,7 @@ class AIPlannerClass:
         self.emitter.send(message)  # Send out the message
 
     def send_finish(self):
+        pprint.pprint(baby_map_bonus.map)
         self.send_map_array(np.array(baby_map_bonus.map))
         exit_mes = struct.pack('c', b'E')
         self.emitter.send(exit_mes)
@@ -866,7 +937,6 @@ class AIPlannerClass:
             tup = struct.unpack('c f i', recivedData)
             if tup[0].decode("utf-8") == 'G':
                 self.receiver.nextPacket()
-                print(tup)
                 self.score = tup[1]
                 self.remained_time = tup[2]
                 if self.initial_time == -1:
@@ -888,8 +958,10 @@ class AIPlannerClass:
         print("in go_to_not_seen_tile section *************************************************************** ")
         best_path = baby_search_finder.get_best_path(baby_location.tilePosX, baby_location.tilePosY)
 
-        if len(best_path) < 2:
+        if len(
+                best_path) < 2 or baby_status.front_status == AroundStatus.is_wall or baby_location.direction == Direction.not_initialized:
             self.random_search()
+            return
 
         p1 = best_path[0]
         p2 = best_path[1]
@@ -1032,6 +1104,9 @@ class CameraClass:
         elif self.color_distance(r, g, b, 42, 46, 60) < 50 or self.color_distance(r, g, b, 33, 38, 56) < 50:
             return GameColors.silver
 
+        elif self.color_distance(r, g, b, 29, 241, 29) < 50 or self.color_distance(r, g, b, 18, 189, 18) < 50:
+            return GameColors.sabz
+
         return GameColors.other
 
     def capture(self):
@@ -1124,8 +1199,10 @@ class CameraClass:
             if baby_controller.stopFlag:
                 # print(data_left)
                 save_image(img1[0])
-                baby_planner.send_victim(self.all_type[np.argmax(self.model.predict(img1)[0])])
+                vtype = self.all_type[np.argmax(self.model.predict(img1)[0])]
+                baby_planner.send_victim(vtype)
                 self.victim_positions.append((baby_location.tilePosX, baby_location.tilePosY))
+                baby_map_bonus.update_victim(vtype,Direction.left)
 
         if type_right != VictimTypes.wall and baby_status.s2.getValue() < 0.12:
             # inja bayad s2 bashe
@@ -1135,8 +1212,11 @@ class CameraClass:
             if baby_controller.stopFlag:
                 # print(data_right)
                 save_image(img2[0])
-                baby_planner.send_victim(self.all_type[np.argmax(self.model.predict(img2)[0])])
+                vtype = self.all_type[np.argmax(self.model.predict(img2)[0])]
+                baby_planner.send_victim(vtype)
                 self.victim_positions.append((baby_location.tilePosX, baby_location.tilePosY))
+                baby_map_bonus.update_victim(vtype,Direction.right)
+
 
         # if type_left == VictimTypes.victim  :
         #
@@ -1218,7 +1298,6 @@ while baby_robot.step(timeStep) != -1:
     # try:
     #     print(baby_controller.state)
     baby_planner.plan()
-    print(baby_planner.ai_state)
 
 # except:
 #     pass
