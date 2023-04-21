@@ -94,6 +94,7 @@ class MapBonus:
         y = baby_location.light_y_tile
         if baby_location.direction != Direction.not_initialized:
             self.set_map_floor(x, y, color)
+            # print(f"color : {color} : {x, y}")
 
     def set_map_floor(self, tileX, tileY, color: GameColors):
         if color != GameColors.other and (color == GameColors.green or baby_location.light_in_tile_center()):
@@ -355,6 +356,8 @@ class RobotControlClass:
         self.stopFlag = False
         self.leftWheelSpeed = 0
         self.rightWheelSpeed = 0
+        self.errors_list_left = []
+        self.errors_list_right = []
 
     def run(self):
         if self.state == MoveState.forward:
@@ -378,22 +381,42 @@ class RobotControlClass:
         self.stopFlag = False
 
     def move_forward(self):
-        e = baby_location.move_straight_error * 150
-        e = max(e, -.3)
-        e = min(e, .3)
+        e = baby_location.move_straight_error * 500
+        e = max(e, -.5)
+        e = min(e, .5)
         er = 0
         el = 0
+        dist = .035
+        # print(baby_status.s2.getValue(), baby_status.s4.getValue())
+        if baby_status.s2.getValue() < baby_status.s4.getValue():
+            if baby_status.s2.getValue() < dist:
+                # print("too close to right")
+                el = - abs(baby_status.s2.getValue() - dist) * 50
+            elif dist <= baby_status.s2.getValue() < dist * 4:
+                # print("too far from right")
+                er = -abs(baby_status.s2.getValue() - dist) * 50
+        else:
+            if baby_status.s4.getValue() < dist:
+                # print("too close to left")
+                er = - abs(baby_status.s4.getValue() - dist) * 50
+            elif dist <= baby_status.s4.getValue() < dist * 4:
+                # print("too far from left")
+                el = -abs(baby_status.s4.getValue() - dist) * 50
+        # print("error",er, el)
+        self.errors_list_left.append(el)
+        self.errors_list_right.append(er)
 
-        if .04 < baby_status.s2.getValue() < .13:
-            el = .1
-            er = .05
+        if len(self.errors_list_left) >= 4:
+            del self.errors_list_left[0]
 
-        if .04 < baby_status.s4.getValue() < .13:
-            er = .1
-            el = .05
+        if len(self.errors_list_right) >= 4:
+            del self.errors_list_right[0]
 
-        self.leftWheelSpeed = self.max_velocity * .8 - e + er
-        self.rightWheelSpeed = self.max_velocity * .8 + e + el
+        min_errors_left = min(self.errors_list_left)
+        min_errors_right = min(self.errors_list_right)
+
+        self.leftWheelSpeed = self.max_velocity * .8 - e + min_errors_right
+        self.rightWheelSpeed = self.max_velocity * .8 + e + min_errors_left
         self.left_wheel.setVelocity(self.leftWheelSpeed)
         self.right_wheel.setVelocity(self.rightWheelSpeed)
 
@@ -482,7 +505,8 @@ class StatusClass:
         self.s6.enable(timeStep)
 
     def update_status(self):
-        if self.s1.getValue() > 0.08 and self.s5.getValue() > 0.03 and self.s6.getValue() > 0.03:
+        # print(f"s1 : {self.s1.getValue()} s5 : {self.s5.getValue()} s6 : {self.s6.getValue()}")
+        if self.s1.getValue() > 0.07 and self.s5.getValue() > 0.03 and self.s6.getValue() > 0.03:
             if baby_location.is_tile_seen(baby_location.NextPosForward):
                 self.front_status = AroundStatus.is_seen
             else:
@@ -632,10 +656,11 @@ class AIPlannerClass:
             # print(f"area detected, {self.area_number}")
 
     def choose_state(self):
+        print(self.remained_time , self.initial_time)
         if self.initial_time == -1:
             self.ai_state = AIStates.random_searching
             return
-        if self.remained_time / self.initial_time > .9:
+        if self.remained_time / self.initial_time > .8 :
             self.ai_state = AIStates.random_searching
         # elif self.remained_time / self.initial_time > .3:
         #     self.ai_state = AIStates.wall_following
@@ -750,8 +775,8 @@ class AIPlannerClass:
                 target_tile = self.not_seen_tiles.pop()
                 baby_search_finder = ReturnPath(*target_tile)
                 self.ai_state = AIStates.not_seen_searching
-                print("go to not seen section")
-                print(baby_search_finder.get_best_path(baby_location.tilePosX, baby_location.tilePosY))
+                # print("go to not seen section")
+                # print(baby_search_finder.get_best_path(baby_location.tilePosX, baby_location.tilePosY))
             elif len(allChoice) > 0:
                 baby_controller.state = random.choice(allChoice)
 
@@ -832,21 +857,22 @@ class AIPlannerClass:
         self.emitter.send(exit_mes)
 
     def update_game_time_score(self):
-        try:
-            message = struct.pack('c', 'G'.encode())
-            self.emitter.send(message)
+        # try:
+        message = struct.pack('c', 'G'.encode())
+        self.emitter.send(message)
 
-            if self.receiver.getQueueLength() > 0:
-                recivedData = self.receiver.getString()
-                tup = struct.unpack('c f i', recivedData)
-                if tup[0].decode("utf-8") == 'G':
-                    self.receiver.nextPacket()
-                    self.score = tup[1]
-                    self.remained_time = tup[2]
-                    if self.initial_time == -1:
-                        self.initial_time = self.remained_time
-        except:
-            pass
+        if self.receiver.getQueueLength() > 0:
+            recivedData = self.receiver.getBytes()
+            tup = struct.unpack('c f i', recivedData)
+            if tup[0].decode("utf-8") == 'G':
+                self.receiver.nextPacket()
+                print(tup)
+                self.score = tup[1]
+                self.remained_time = tup[2]
+                if self.initial_time == -1:
+                    self.initial_time = self.remained_time
+        # except:
+        #     pass
 
     def send_map_array(self, array: np.ndarray):
         s = array.shape
@@ -863,7 +889,7 @@ class AIPlannerClass:
         best_path = baby_search_finder.get_best_path(baby_location.tilePosX, baby_location.tilePosY)
 
         if len(best_path) < 2:
-            self.ai_state = AIStates.random_searching
+            self.random_search()
 
         p1 = best_path[0]
         p2 = best_path[1]
@@ -1016,18 +1042,19 @@ class CameraClass:
         return img1, img2
 
     def check_type(self, data):
-        back_per = 0
+        wall_per = 0
         sky = 0
         for i in range(len(data)):
             color = data[i][0][0]
             value = data[i][0][2]
             per = data[i][1]
 
-            if 80 <= color <= 120:
-                back_per += per
-            if 105 <= color <= 120:
+            if 80 <= color <= 125:
+                wall_per += per
+            if 105 <= color <= 125:
                 sky += per
-        if back_per >= .65 or sky >= .20:
+        # print(wall_per, sky)
+        if wall_per >= .7 or sky >= .05:
             return VictimTypes.wall
 
         return VictimTypes.sign_or_victim
@@ -1055,7 +1082,7 @@ class CameraClass:
         pixel_values = sample_image.reshape((-1, 3))
         pixel_values = np.float32(pixel_values)
 
-        k = 3
+        k = 5
 
         criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 10, 1.0)
 
@@ -1079,7 +1106,9 @@ class CameraClass:
             return
         data_left = self.get_color_data(img1)
         data_right = self.get_color_data(img2)
+        # print("left")
         type_left = self.check_type(data_left)
+        # print("right")
         type_right = self.check_type(data_right)
         # img1 = cv2.resize(img1, dsize=(224, 224), interpolation=cv2.INTER_CUBIC)
         # img2 = cv2.resize(img2, dsize=(224, 224), interpolation=cv2.INTER_CUBIC)
@@ -1087,22 +1116,24 @@ class CameraClass:
         # img2 = np.array([np.resize(img2, (224, 224, 3))])
         img1 = np.array([tf.keras.preprocessing.image.smart_resize(img1, (224, 224), interpolation='bilinear')])
         img2 = np.array([tf.keras.preprocessing.image.smart_resize(img2, (224, 224), interpolation='bilinear')])
-        if type_left != VictimTypes.wall and baby_status.s2.getValue() < 0.12:
+        if type_left != VictimTypes.wall and baby_status.s4.getValue() < 0.12:
+            # inja bayad s4 bashe
             if baby_controller.stopCounter == 0:
                 baby_controller.dont_move()
 
             if baby_controller.stopFlag:
-                print(data_left)
+                # print(data_left)
                 save_image(img1[0])
                 baby_planner.send_victim(self.all_type[np.argmax(self.model.predict(img1)[0])])
                 self.victim_positions.append((baby_location.tilePosX, baby_location.tilePosY))
 
-        if type_right != VictimTypes.wall and baby_status.s4.getValue() < 0.12:
+        if type_right != VictimTypes.wall and baby_status.s2.getValue() < 0.12:
+            # inja bayad s2 bashe
             if baby_controller.stopCounter == 0:
                 baby_controller.dont_move()
 
             if baby_controller.stopFlag:
-                print(data_right)
+                # print(data_right)
                 save_image(img2[0])
                 baby_planner.send_victim(self.all_type[np.argmax(self.model.predict(img2)[0])])
                 self.victim_positions.append((baby_location.tilePosX, baby_location.tilePosY))
@@ -1187,6 +1218,7 @@ while baby_robot.step(timeStep) != -1:
     # try:
     #     print(baby_controller.state)
     baby_planner.plan()
+    print(baby_planner.ai_state)
 
 # except:
 #     pass
