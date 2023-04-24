@@ -75,6 +75,7 @@ class TurnState(Enum):
 
 
 class MapBonus:
+
     def __init__(self):
         self.MAP_SIZE = 50
         self.map = [['0' for _ in range(2 * self.MAP_SIZE + 1)] for _ in range(2 * self.MAP_SIZE + 1)]
@@ -572,8 +573,8 @@ class RobotControlClass:
         min_errors_right = min(self.errors_list_right)
         min_errors_left = 0
         min_errors_right = 0
-        self.leftWheelSpeed = self.max_velocity * .8 - e + min_errors_right
-        self.rightWheelSpeed = self.max_velocity * .8 + e + min_errors_left
+        self.leftWheelSpeed = self.max_velocity * .8 - e
+        self.rightWheelSpeed = self.max_velocity * .8 + e
         self.left_wheel.setVelocity(self.leftWheelSpeed)
         self.right_wheel.setVelocity(self.rightWheelSpeed)
 
@@ -604,6 +605,9 @@ class RobotControlClass:
             if self.leftWheelPosSensor.getValue() < (self.leftWheelPos - 4.42 / 2):
                 self.turn_state = TurnState.not_started
                 self.state = MoveState.forward
+
+
+
 
     def turn_back(self):
         baby_location.history.clear()
@@ -795,6 +799,9 @@ class AIPlannerClass:
         self.remained_time = 1000
         self.initial_time = -1
         self.area_number = 1
+        self.target_list = []
+        self.counterTri = 0
+        self.flag = True
 
     def area_detect(self):
         if baby_location.areaBlockChanged:
@@ -826,38 +833,39 @@ class AIPlannerClass:
             # print(f"area detected, {self.area_number}")
 
     def choose_state(self):
-        # print(self.remained_time / self.initial_time)
-        if self.ai_state == AIStates.not_seen_searching:
-            return
-        if self.initial_time == -1:
-            self.ai_state = AIStates.random_searching
-            return
-        if self.remained_time / self.initial_time > .2:
-            self.ai_state = AIStates.random_searching
-        # elif self.remained_time / self.initial_time > .3:
-        #     self.ai_state = AIStates.wall_following
-        else:
-            self.ai_state = AIStates.returning
-        # baby_controller.state = MoveState.forward
+        # # print(self.remained_time / self.initial_time)
+        # if self.ai_state == AIStates.not_seen_searching:
+        #     return
+        # if self.initial_time == -1:
+        #     self.ai_state = AIStates.random_searching
+        #     return
+        # if self.remained_time / self.initial_time > .2:
+        #     self.ai_state = AIStates.random_searching
+        # # elif self.remained_time / self.initial_time > .3:
+        # #     self.ai_state = AIStates.wall_following
+        # else:
+        #     self.ai_state = AIStates.returning
+        baby_controller.state = MoveState.forward
 
     def plan(self):
-        self.update_game_time_score()
-        baby_status.update_status()
+        # self.update_game_time_score()
+        # baby_status.update_status()
         baby_location.update_parameters()
-        baby_cam.check_victim()
-        baby_map_bonus.update_map()
-        self.area_detect()
-        self.choose_state()
-        if baby_controller.state != MoveState.stop:
-
-            if self.ai_state == AIStates.random_searching:
-                self.random_search()
-            elif self.ai_state == AIStates.wall_following:
-                self.wall_follow()
-            elif self.ai_state == AIStates.returning:
-                self.return_start_tile()
-            elif self.ai_state == AIStates.not_seen_searching:
-                self.go_to_not_seen_tile()
+        # baby_cam.check_victim()
+        # baby_map_bonus.update_map()
+        self.traingle_loop()
+        # self.area_detect()
+        # self.choose_state()
+        # if baby_controller.state != MoveState.stop:
+        #
+        #     if self.ai_state == AIStates.random_searching:
+        #         self.random_search()
+        #     elif self.ai_state == AIStates.wall_following:
+        #         self.wall_follow()
+        #     elif self.ai_state == AIStates.returning:
+        #         self.return_start_tile()
+        #     elif self.ai_state == AIStates.not_seen_searching:
+        #         self.go_to_not_seen_tile()
         # baby_controller.dont_move()
         # print(
         # f"s1:{baby_status.s1.getValue()},s2:{baby_status.s2.getValue()},"
@@ -892,10 +900,10 @@ class AIPlannerClass:
                 baby_location.robot_in_tile_center() and baby_location.blockChanged and
                 baby_cam.get_color() != GameColors.blue and baby_cam.get_color() != GameColors.purple and
                 baby_cam.get_color() != GameColors.red and baby_cam.get_color() != GameColors.green) \
-                or baby_cam.get_color() == GameColors.black or baby_location.stuckCounter > 40\
+                or baby_cam.get_color() == GameColors.black or baby_location.stuckCounter > 40 \
                 :
-            print(
-                f"color: {baby_cam.get_color()} is center: {baby_location.robot_in_tile_center()} bloc changed:{baby_location.blockChanged}")
+            # print(
+            # f"color: {baby_cam.get_color()} is center: {baby_location.robot_in_tile_center()} bloc changed:{baby_location.blockChanged}")
             allChoice = []
             emptyChoice = []
             baby_location.blockChanged = False
@@ -933,7 +941,7 @@ class AIPlannerClass:
 
             if len(emptyChoice) > 0:
                 baby_controller.state = random.choice(emptyChoice)
-                print(f"Random search robot choose from emptyChoices: {baby_controller.state}")
+                # print(f"Random search robot choose from emptyChoices: {baby_controller.state}")
                 if len(emptyChoice) > 1:
                     emptyChoice.remove(baby_controller.state)
                     for choice in emptyChoice:
@@ -959,21 +967,21 @@ class AIPlannerClass:
                         self.ai_state = AIStates.not_seen_searching
                         baby_controller.dont_move()
                         baby_location.blockChanged = True
-                        print("go to not seen section")
+                        # print("go to not seen section")
                         self.find_path = return_path
                         return
 
                 if len(allChoice) > 0:
                     baby_controller.state = random.choice(allChoice)
-                    print(f"Random search robot choose from allChoice: {baby_controller.state}")
+                    # print(f"Random search robot choose from allChoice: {baby_controller.state}")
                 else:
-                    print("Bug go to forward")
+                    # print("Bug go to forward")
                     baby_controller.state = MoveState.forward
             elif len(allChoice) > 0:
                 baby_controller.state = random.choice(allChoice)
-                print(f"Random search robot choose from allChoice: {baby_controller.state}")
+                # print(f"Random search robot choose from allChoice: {baby_controller.state}")
             else:
-                print("Bug go to forward")
+                # print("Bug go to forward")
                 baby_controller.state = MoveState.forward
 
     def wall_follow(self):
@@ -1087,7 +1095,7 @@ class AIPlannerClass:
         if baby_location.tilePosX == baby_search_finder.startx and baby_location.tilePosY == baby_search_finder.starty:
             self.ai_state = AIStates.random_searching
 
-        print(f"target is :{baby_search_finder.startx, baby_search_finder.starty},best_path:{self.find_path}")
+        # print(f"target is :{baby_search_finder.startx, baby_search_finder.starty},best_path:{self.find_path}")
         if len(
                 self.find_path) < 2 or (baby_location.stuckCounter > 30 and baby_controller.state == MoveState.forward):
             self.ai_state = AIStates.random_searching
@@ -1145,7 +1153,28 @@ class AIPlannerClass:
                 if dy == -1:
                     baby_controller.state = MoveState.turnLeft
             del self.find_path[0]
-            print(f"not_seen_searching choose {baby_controller.state}, Direction: {baby_location.direction}")
+            # print(f"not_seen_searching choose {baby_controller.state}, Direction: {baby_location.direction}")
+
+    def traingle_loop(self):
+
+        if (baby_location.passedBlocksCounter == 3 or baby_location.passedBlocksCounter == 19 or baby_location.passedBlocksCounter == 35) and baby_location.robot_in_tile_center():
+            baby_controller.state = MoveState.turnRight
+            baby_location.passedBlocksCounter += 1
+
+        elif (baby_location.passedBlocksCounter == 8 or baby_location.passedBlocksCounter == 24 or baby_location.passedBlocksCounter == 40) and baby_location.robot_in_tile_center():
+            baby_controller.state = MoveState.turnRight
+            baby_location.passedBlocksCounter += 1
+
+        elif (baby_location.passedBlocksCounter == 11 or baby_location.passedBlocksCounter == 27 or baby_location.passedBlocksCounter == 43) and baby_location.robot_in_tile_center():
+            baby_controller.state = MoveState.turnRight
+            baby_location.passedBlocksCounter += 1
+
+        elif (baby_location.passedBlocksCounter == 16 or baby_location.passedBlocksCounter == 32) and baby_location.robot_in_tile_center():
+            baby_controller.state = MoveState.turnRight
+            baby_location.passedBlocksCounter += 1
+
+        elif baby_location.passedBlocksCounter == 48 and baby_location.robot_in_tile_center():
+            baby_planner.send_finish()
 
 
 class CameraClass:
@@ -1334,7 +1363,7 @@ class CameraClass:
 
             if baby_controller.stopFlag:
                 # print(data_left)
-                save_image(img1[0])
+                # save_image(img1[0])
                 vtype = self.all_type[np.argmax(self.model.predict(img1)[0])]
                 baby_planner.send_victim(vtype)
                 self.victim_positions.append((baby_location.tilePosX, baby_location.tilePosY))
@@ -1347,7 +1376,7 @@ class CameraClass:
 
             if baby_controller.stopFlag:
                 # print(data_right)
-                save_image(img2[0])
+                # save_image(img2[0])
                 vtype = self.all_type[np.argmax(self.model.predict(img2)[0])]
                 baby_planner.send_victim(vtype)
                 self.victim_positions.append((baby_location.tilePosX, baby_location.tilePosY))
@@ -1395,9 +1424,11 @@ baby_search_finder = ReturnPath(0, 0)
 
 while baby_robot.step(timeStep) != -1:
     # try:
-    #     print(baby_controller.state)
+    print(baby_location.passedBlocksCounter)
     baby_planner.plan()
-    # print(baby_location.robot_in_tile_center())
+
+
+
 
 # except:
 #     pass
