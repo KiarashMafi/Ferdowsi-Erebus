@@ -617,8 +617,8 @@ class RobotControlClass:
         else:
             target = self.leftWheelPos + self.full_turn_angle / 2
             pid_coef = target - self.leftWheelPosSensor.getValue()
-            self.leftWheelSpeed = - max_min(pid_coef * 5, 2)
-            self.rightWheelSpeed = + max_min(pid_coef * 5, 2)
+            self.leftWheelSpeed = max_min(pid_coef * 5, 2)
+            self.rightWheelSpeed = - max_min(pid_coef * 5, 2)
             self.normalize_wheel_speed()
             self.left_wheel.setVelocity(self.leftWheelSpeed)
             self.right_wheel.setVelocity(self.rightWheelSpeed)
