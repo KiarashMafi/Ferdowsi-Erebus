@@ -53,7 +53,7 @@ class MoveState(Enum):
     turnToLeftDirection = 6
     turnToUpDirection = 7
     turnToDownDirection = 8
-    stop = 5
+    stop = 9
 
 
 class Direction(Enum):
@@ -250,6 +250,8 @@ class LocationClass:
                         self.direction = Direction.right
                     elif baby_controller.state == MoveState.turnBack:
                         self.direction = Direction.down
+                    print(f"we are turning {baby_controller.state} new direction is:{self.direction}")
+                    return
 
                 elif self.direction == Direction.left:
                     if baby_controller.state == MoveState.turnLeft:
@@ -258,6 +260,8 @@ class LocationClass:
                         self.direction = Direction.up
                     elif baby_controller.state == MoveState.turnBack:
                         self.direction = Direction.right
+                    print(f"we are turning {baby_controller.state} new direction is:{self.direction}")
+                    return
 
                 elif self.direction == Direction.right:
                     if baby_controller.state == MoveState.turnLeft:
@@ -266,6 +270,8 @@ class LocationClass:
                         self.direction = Direction.down
                     elif baby_controller.state == MoveState.turnBack:
                         self.direction = Direction.left
+                    print(f"we are turning {baby_controller.state} new direction is:{self.direction}")
+                    return
 
                 elif self.direction == Direction.down:
                     if baby_controller.state == MoveState.turnLeft:
@@ -274,7 +280,8 @@ class LocationClass:
                         self.direction = Direction.left
                     elif baby_controller.state == MoveState.turnBack:
                         self.direction = Direction.up
-                print(f"we are turning {baby_controller.state} new direction is:{self.direction}")
+                    print(f"we are turning {baby_controller.state} new direction is:{self.direction}")
+                    return
 
     def set_tile_pos(self):
         # print(f"current is {self.tilePosX, self.tilePosY}")
@@ -519,7 +526,6 @@ class RobotControlClass:
         self.errors_list_right = []
 
     def run(self):
-        print(self.state)
         if self.state == MoveState.forward:
             self.move_forward()
         elif self.state == MoveState.turnLeft:
@@ -588,10 +594,8 @@ class RobotControlClass:
         if len(self.errors_list_right) >= 4:
             del self.errors_list_right[0]
 
-        # min_errors_left = min(self.errors_list_left)
-        # min_errors_right = min(self.errors_list_right)
-        min_errors_left = 0
-        min_errors_right = 0
+        min_errors_left = min(self.errors_list_left)
+        min_errors_right = min(self.errors_list_right)
         print(f"error is :{e},direction is :{baby_location.direction}")
         if len(baby_location.history) < 6:
             print("not moved yet")
@@ -956,7 +960,7 @@ class AIPlannerClass:
         if self.initial_time == -1:
             self.ai_state = AIStates.random_searching
             return
-        if self.remained_time / self.initial_time > .2:
+        if self.remained_time / self.initial_time > .5:
             self.ai_state = AIStates.random_searching
         # elif self.remained_time / self.initial_time > .3:
         #     self.ai_state = AIStates.wall_following
