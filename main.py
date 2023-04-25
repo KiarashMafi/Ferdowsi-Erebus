@@ -11,6 +11,7 @@ from PIL import Image
 from numpy import array, argwhere
 import pprint
 
+pi = 3.14
 ROBOT_RADIUS = .04
 
 
@@ -48,6 +49,10 @@ class MoveState(Enum):
     turnRight = 2
     turnBack = 3
     moveBack = 4
+    turnToRightDirection = 5
+    turnToLeftDirection = 6
+    turnToUpDirection = 7
+    turnToDownDirection = 8
     stop = 5
 
 
@@ -226,17 +231,18 @@ class LocationClass:
         self.areaBlockChanged = False
         self.passedBlocksCounter = 0
         self.repeatedBlocksCounter = 0
-        self.move_straight_error = 0.0
         self.update_direction = False
 
     def update_estimate_direction(self):
-        if self.get_direction() != Direction.not_initialized:
+        if baby_controller.state == MoveState.forward:
             self.update_direction = False
-            self.direction = self.get_direction()
 
+        if self.get_direction() != Direction.not_initialized:
+            self.direction = self.get_direction()
         else:
-            if self.update_direction is False and baby_controller.state != MoveState.forward:
+            if not self.update_direction and baby_controller.state != MoveState.forward:
                 self.update_direction = True
+                print(f"we are turning last direction is:{self.direction}")
                 if self.direction == Direction.up:
                     if baby_controller.state == MoveState.turnLeft:
                         self.direction = Direction.left
@@ -268,6 +274,7 @@ class LocationClass:
                         self.direction = Direction.left
                     elif baby_controller.state == MoveState.turnBack:
                         self.direction = Direction.up
+                print(f"we are turning {baby_controller.state} new direction is:{self.direction}")
 
     def set_tile_pos(self):
         # print(f"current is {self.tilePosX, self.tilePosY}")
@@ -316,7 +323,7 @@ class LocationClass:
         self.set_tile_pos()
         if baby_controller.state == MoveState.forward:
             self.add_point()
-            if len(self.history) > 4:
+            if len(self.history) > 6:
                 self.history.remove(self.history[0])
         self.lightX, self.lightY = self.get_light_pos()
         self.light_x_tile = int((self.lightX - self.offsetX + 0.06) // 0.12 + self.MAP_SIZE // 2)
@@ -337,19 +344,8 @@ class LocationClass:
             self.passedBlocksCounter += 1
         # set_game_map(self.lightXPos, self.lightXPos, colorControl.get_color())
 
-        if (self.direction == Direction.up or self.direction == Direction.down) and len(self.history) > 0:
-            self.move_straight_error = self.history[0][0] - self.history[-1][0]
-            if self.direction == Direction.down:
-                self.move_straight_error *= -1
-        elif (self.direction == Direction.right or self.direction == Direction.left) and len(self.history) > 0:
-            self.move_straight_error = self.history[0][1] - self.history[-1][1]
-            if self.direction == Direction.left:
-                self.move_straight_error *= -1
-        else:
-            self.move_straight_error = 0
-
     def get_direction(self):
-        if len(self.history) < 4 or baby_controller.state != MoveState.forward:
+        if len(self.history) < 6 or baby_controller.state != MoveState.forward:
             return Direction.not_initialized
 
         deltaX = self.history[-1][0] - self.history[0][0]
@@ -498,12 +494,11 @@ class LocationClass:
 
 class RobotControlClass:
     def __init__(self, robot: Robot):
-        self.full_turn_angle = 4.6
+        self.full_turn_angle = 4.46
         self.state = MoveState.forward
-        self.max_velocity = 6.28
+        self.max_velocity = 5.20
         self.last_state = MoveState.forward
         self.turn_state = TurnState.not_started
-        self.direction = Direction.not_initialized
         self.left_wheel = robot.getDevice("wheel1 motor")
         self.right_wheel = robot.getDevice("wheel2 motor")
         self.left_wheel.setPosition(float("inf"))
@@ -512,6 +507,8 @@ class RobotControlClass:
         self.leftWheelPosSensor: PositionSensor = self.left_wheel.getPositionSensor()
         self.rightWheelPosSensor.enable(timeStep)
         self.leftWheelPosSensor.enable(timeStep)
+        self.iu: InertialUnit = robot.getDevice("iu")
+        self.iu.enable(timeStep)
         self.stopCounter = 0
         self.leftWheelPos = 0
         self.rightWheelPos = 0
@@ -522,6 +519,7 @@ class RobotControlClass:
         self.errors_list_right = []
 
     def run(self):
+        print(self.state)
         if self.state == MoveState.forward:
             self.move_forward()
         elif self.state == MoveState.turnLeft:
@@ -532,6 +530,14 @@ class RobotControlClass:
             self.turn_back()
         elif self.state == MoveState.moveBack:
             self.move_back()
+        elif self.state == MoveState.turnToDownDirection:
+            self.turn_to_down()
+        elif self.state == MoveState.turnToUpDirection:
+            self.turn_to_up()
+        elif self.state == MoveState.turnToLeftDirection:
+            self.turn_to_left()
+        elif self.state == MoveState.turnToRightDirection:
+            self.turn_to_right()
         elif self.state == MoveState.stop:
             self.stop()
 
@@ -545,10 +551,14 @@ class RobotControlClass:
 
     def move_forward(self):
         e = 0
-        if baby_planner.area_number != 4:
-            e = baby_location.move_straight_error * 500
-            e = max(e, -.5)
-            e = min(e, .5)
+        if baby_location.direction == Direction.left:
+            e = self.get_left_error(4)
+        if baby_location.direction == Direction.right:
+            e = self.get_right_error(4)
+        if baby_location.direction == Direction.up:
+            e = self.get_up_error(4)
+        if baby_location.direction == Direction.down:
+            e = self.get_down_error(4)
 
         er = 0
         el = 0
@@ -578,12 +588,27 @@ class RobotControlClass:
         if len(self.errors_list_right) >= 4:
             del self.errors_list_right[0]
 
-        min_errors_left = min(self.errors_list_left)
-        min_errors_right = min(self.errors_list_right)
+        # min_errors_left = min(self.errors_list_left)
+        # min_errors_right = min(self.errors_list_right)
         min_errors_left = 0
         min_errors_right = 0
-        self.leftWheelSpeed = self.max_velocity * .8 - e + min_errors_right
-        self.rightWheelSpeed = self.max_velocity * .8 + e + min_errors_left
+        print(f"error is :{e},direction is :{baby_location.direction}")
+        if len(baby_location.history) < 6:
+            print("not moved yet")
+            e = 0
+        elif abs(e) > .3 * 4:
+            if baby_location.direction == Direction.left:
+                self.state = MoveState.turnToLeftDirection
+            if baby_location.direction == Direction.right:
+                self.state = MoveState.turnToRightDirection
+            if baby_location.direction == Direction.up:
+                self.state = MoveState.turnToUpDirection
+            if baby_location.direction == Direction.down:
+                self.state = MoveState.turnToDownDirection
+            return
+        self.leftWheelSpeed = self.max_velocity - e + min_errors_right
+        self.rightWheelSpeed = self.max_velocity + e + min_errors_left
+        self.normalize_wheel_speed()
         self.left_wheel.setVelocity(self.leftWheelSpeed)
         self.right_wheel.setVelocity(self.rightWheelSpeed)
 
@@ -596,8 +621,11 @@ class RobotControlClass:
         else:
             target = self.leftWheelPos + self.full_turn_angle / 2
             pid_coef = target - self.leftWheelPosSensor.getValue()
-            self.left_wheel.setVelocity(self.max_velocity * 0.5 * max_min(pid_coef, 2))
-            self.right_wheel.setVelocity(-self.max_velocity * 0.5 * max_min(pid_coef, 2))
+            self.leftWheelSpeed = self.max_velocity * 0.2 * max_min(pid_coef, 2)
+            self.rightWheelSpeed = -self.max_velocity * 0.2 * max_min(pid_coef, 2)
+            self.normalize_wheel_speed()
+            self.left_wheel.setVelocity(self.leftWheelSpeed)
+            self.right_wheel.setVelocity(self.rightWheelSpeed)
             if target - .01 < self.leftWheelPosSensor.getValue() < target + .01:
                 self.turn_state = TurnState.not_started
                 self.state = MoveState.forward
@@ -611,8 +639,11 @@ class RobotControlClass:
         else:
             target = self.leftWheelPos - self.full_turn_angle / 2
             pid_coef = target - self.leftWheelPosSensor.getValue()
-            self.left_wheel.setVelocity(self.max_velocity * 0.5 * max_min(pid_coef, 2))
-            self.right_wheel.setVelocity(-self.max_velocity * 0.5 * max_min(pid_coef, 2))
+            self.leftWheelSpeed = self.max_velocity * 0.2 * max_min(pid_coef, 2)
+            self.rightWheelSpeed = -self.max_velocity * 0.2 * max_min(pid_coef, 2)
+            self.normalize_wheel_speed()
+            self.left_wheel.setVelocity(self.leftWheelSpeed)
+            self.right_wheel.setVelocity(self.rightWheelSpeed)
             if target - .01 < self.leftWheelPosSensor.getValue() < target + .01:
                 self.turn_state = TurnState.not_started
                 self.state = MoveState.forward
@@ -626,8 +657,11 @@ class RobotControlClass:
         else:
             target = self.leftWheelPos + self.full_turn_angle
             pid_coef = target - self.leftWheelPosSensor.getValue()
-            self.left_wheel.setVelocity(self.max_velocity * 0.5 * max_min(pid_coef, 2))
-            self.right_wheel.setVelocity(-self.max_velocity * 0.5 * max_min(pid_coef, 2))
+            self.leftWheelSpeed = self.max_velocity * 0.2 * max_min(pid_coef, 2)
+            self.rightWheelSpeed = -self.max_velocity * 0.2 * max_min(pid_coef, 2)
+            self.normalize_wheel_speed()
+            self.left_wheel.setVelocity(self.leftWheelSpeed)
+            self.right_wheel.setVelocity(self.rightWheelSpeed)
             if target - .01 < self.leftWheelPosSensor.getValue() < target + .01:
                 self.turn_state = TurnState.not_started
                 self.state = MoveState.forward
@@ -640,7 +674,7 @@ class RobotControlClass:
         self.right_wheel.setVelocity(rightWheelSpeed)
 
     def stop(self):
-
+        baby_location.history.clear()
         self.stopCounter += 1
 
         if self.stopCounter >= 100 - 10:
@@ -653,6 +687,86 @@ class RobotControlClass:
 
         self.left_wheel.setVelocity(0)
         self.right_wheel.setVelocity(0)
+
+    def turn_to_right(self):
+        baby_location.history.clear()
+        e = self.get_right_error()
+        self.leftWheelSpeed = - e
+        self.rightWheelSpeed = + e
+        self.left_wheel.setVelocity(self.leftWheelSpeed)
+        self.right_wheel.setVelocity(self.rightWheelSpeed)
+        if abs(e) < .05:
+            self.state = MoveState.forward
+
+    def turn_to_up(self):
+        baby_location.history.clear()
+        e = self.get_up_error()
+        self.leftWheelSpeed = - e
+        self.rightWheelSpeed = + e
+        self.left_wheel.setVelocity(self.leftWheelSpeed)
+        self.right_wheel.setVelocity(self.rightWheelSpeed)
+        if abs(e) < .05:
+            self.state = MoveState.forward
+
+    def turn_to_left(self):
+        baby_location.history.clear()
+        e = self.get_left_error()
+        self.leftWheelSpeed = - e
+        self.rightWheelSpeed = + e
+        self.left_wheel.setVelocity(self.leftWheelSpeed)
+        self.right_wheel.setVelocity(self.rightWheelSpeed)
+        if abs(e) < .05:
+            self.state = MoveState.forward
+
+    def turn_to_down(self):
+        baby_location.history.clear()
+        e = self.get_down_error()
+        self.leftWheelSpeed = - e
+        self.rightWheelSpeed = + e
+        self.left_wheel.setVelocity(self.leftWheelSpeed)
+        self.right_wheel.setVelocity(self.rightWheelSpeed)
+        if abs(e) < .05:
+            self.state = MoveState.forward
+
+    def get_right_error(self, coef=2):
+        angle = self.iu.getRollPitchYaw()[2]
+        diff = angle - (-pi / 2)
+        e = diff
+        if e > pi:
+            e = e - 2 * pi
+        e = max_min(e * coef, self.max_velocity)
+        return e
+
+    def get_down_error(self, coef=2):
+        angle = self.iu.getRollPitchYaw()[2]
+        if angle > 0:
+            e = angle - pi
+        else:
+            e = angle + pi
+        e = max_min(e * coef, self.max_velocity)
+        return e
+
+    def get_left_error(self, coef=2):
+        angle = self.iu.getRollPitchYaw()[2]
+        diff = angle - pi / 2
+        e = diff
+        if e < - pi:
+            e = e + 2 * pi
+        e = max_min(e * coef, self.max_velocity)
+        return e
+
+    def get_up_error(self, coef=2):
+        angle = self.iu.getRollPitchYaw()[2]
+        diff = angle - 0
+        e = diff
+        e = max_min(e * coef, self.max_velocity)
+        return e
+
+    def normalize_wheel_speed(self):
+        if abs(self.leftWheelSpeed) > self.max_velocity or abs(self.rightWheelSpeed) > self.max_velocity:
+            max_wheel = max(abs(self.leftWheelSpeed), abs(self.rightWheelSpeed))
+            self.leftWheelSpeed *= self.max_velocity / max_wheel
+            self.rightWheelSpeed *= self.max_velocity / max_wheel
 
 
 class StatusClass:
@@ -886,7 +1000,7 @@ class AIPlannerClass:
             return
 
         if baby_location.stuckCounter > 30:
-
+            print("is stuck")
             if baby_status.s3.getValue() < 0.2 or baby_status.s5.getValue() < 0.2:
                 baby_controller.state = MoveState.turnRight
 
@@ -902,8 +1016,7 @@ class AIPlannerClass:
                 baby_location.robot_in_tile_center() and baby_location.blockChanged and
                 baby_cam.get_color() != GameColors.blue and baby_cam.get_color() != GameColors.purple and
                 baby_cam.get_color() != GameColors.red and baby_cam.get_color() != GameColors.green) \
-                or baby_cam.get_color() == GameColors.black or baby_location.stuckCounter > 40 \
-                :
+                or baby_cam.get_color() == GameColors.black:
             print(
                 f"color: {baby_cam.get_color()} is center: {baby_location.robot_in_tile_center()} bloc changed:{baby_location.blockChanged}")
             allChoice = []
@@ -976,7 +1089,6 @@ class AIPlannerClass:
                               f"right :{baby_location.NextPosRight}"
                               f"back :{baby_location.NextPosBackward}")
                         baby_controller.dont_move()
-                        baby_location.blockChanged = True
                         print("go to not seen section")
                         self.find_path = return_path
                         return
