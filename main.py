@@ -101,7 +101,7 @@ class MapBonus:
             self.set_map_victim(baby_location.NextPosRight, current_loc, victim_type)
 
     def update_walls(self):
-        if baby_location.robot_in_tile_center() and baby_controller.state == MoveState.forward:
+        if baby_controller.state == MoveState.forward:
             current_loc = (baby_location.tilePosX, baby_location.tilePosY)
             if baby_status.left_status == AroundStatus.is_wall:
                 self.set_map_wall(baby_location.NextPosLeft, current_loc)
@@ -149,18 +149,24 @@ class MapBonus:
             y = 2 * (next_tile[1] + current_tile[1] + 1)
             x = 4 * current_tile[0]
             if baby_planner.area_number == 1:
-                self.map[x + 2][y] = type
-            if baby_planner.area_number != 4:
                 self.map[x + 1][y] = type
-                self.map[x + 3][y] = type
+                # self.map[x + 2][y] = type
+            if baby_planner.area_number > 1:
+                if baby_location.get_sub_area() in [2, 4]:
+                    self.map[x + 1][y] = type
+                else:
+                    self.map[x + 3][y] = type
         if baby_location.direction in [Direction.up, Direction.down]:
             x = 2 * (next_tile[0] + current_tile[0] + 1)
             y = 4 * current_tile[1]
             if baby_planner.area_number == 1:
-                self.map[x][y + 2] = type
-            if baby_planner.area_number != 4:
                 self.map[x][y + 1] = type
-                self.map[x][y + 3] = type
+                # self.map[x][y + 2] = type
+            if baby_planner.area_number > 1:
+                if baby_location.get_sub_area() in [1, 2]:
+                    self.map[x][y + 1] = type
+                else:
+                    self.map[x][y + 3] = type
 
     def set_map_wall(self, next_tile, current_tile):
         if baby_location.direction in [Direction.left, Direction.right]:
@@ -267,9 +273,6 @@ class LocationClass:
             elif baby_controller.state == MoveState.turnBack:
                 self.direction = Direction.up
         print(f"updating {baby_controller.state},{self.direction} ")
-
-
-
 
     def set_tile_pos(self):
         self.map[2 * self.tilePosX + 1][2 * self.tilePosY + 1] = 1
@@ -772,7 +775,6 @@ class StatusClass:
         else:
             self.front_status = AroundStatus.is_wall
 
-
         if self.s1.getValue() > .4 and self.s5.getValue() < wall_dist and self.s6.getValue() < wall_dist:
             self.front_status = AroundStatus.is_wall
 
@@ -919,13 +921,13 @@ class AIPlannerClass:
             # print(f"area detected, {self.area_number}")
 
     def choose_state(self):
-        # print(self.remained_time / self.initial_time)
+        print(self.remained_time / self.initial_time)
         if self.ai_state == AIStates.not_seen_searching:
             return
         if self.initial_time == -1:
             self.ai_state = AIStates.random_searching
             return
-        if self.remained_time / self.initial_time > .5:
+        if self.remained_time / self.initial_time > .88:
             self.ai_state = AIStates.random_searching
         # elif self.remained_time / self.initial_time > .3:
         #     self.ai_state = AIStates.wall_following
@@ -978,6 +980,7 @@ class AIPlannerClass:
 
             elif baby_status.s2.getValue() < 0.2 and baby_status.s4.getValue() < 0.2:
                 baby_controller.state = MoveState.turnBack
+            baby_location.update_direction_turning()
 
             return
 
@@ -987,7 +990,7 @@ class AIPlannerClass:
                 baby_cam.get_color() != GameColors.red and baby_cam.get_color() != GameColors.green) \
                 or baby_cam.get_color() == GameColors.black:
             # print(
-                # f"color: {baby_cam.get_color()} is center: {baby_location.robot_in_tile_center()} bloc changed:{baby_location.blockChanged}")
+            # f"color: {baby_cam.get_color()} is center: {baby_location.robot_in_tile_center()} bloc changed:{baby_location.blockChanged}")
             allChoice = []
             emptyChoice = []
             baby_location.blockChanged = False
@@ -1024,7 +1027,11 @@ class AIPlannerClass:
                 baby_controller.state = MoveState.turnBack
 
             if len(emptyChoice) > 0:
-                baby_controller.state = random.choice(emptyChoice)
+                if MoveState.forward in emptyChoice:
+                    baby_controller.state = MoveState.forward
+                else:
+                    baby_controller.state = random.choice(emptyChoice)
+
                 print(f"Random search robot choose from emptyChoices: {baby_controller.state}")
                 if len(emptyChoice) > 1:
                     emptyChoice.remove(baby_controller.state)
@@ -1136,6 +1143,7 @@ class AIPlannerClass:
                     baby_controller.state = MoveState.turnRight
                 if dy == -1:
                     baby_controller.state = MoveState.turnLeft
+            baby_location.update_direction_turning()
 
     def send_victim(self, typ):
         x, y = baby_location.x * 100, baby_location.y * 100
@@ -1146,7 +1154,7 @@ class AIPlannerClass:
     def send_finish(self):
 
         main_array = np.flipud(np.array(baby_map_bonus.map))
-        # np.savetxt("D:\\ali.csv", main_array, delimiter=",", fmt='%s')
+        np.savetxt("D:\\ali.csv", main_array, delimiter=",", fmt='%s')
         self.send_map_array(main_array)
         exit_mes = struct.pack('c', b'E')
         self.emitter.send(exit_mes)
@@ -1186,13 +1194,11 @@ class AIPlannerClass:
             self.ai_state = AIStates.random_searching
             return
 
-
-
         if (baby_location.robot_in_tile_center() and baby_location.blockChanged and \
             baby_location.direction != Direction.not_initialized) or self.start_not_seen_searching:
             baby_location.blockChanged = False
             self.start_not_seen_searching = False
-            self.find_path = baby_search_finder.get_best_path(baby_location.tilePosX,baby_location.tilePosY)
+            self.find_path = baby_search_finder.get_best_path(baby_location.tilePosX, baby_location.tilePosY)
             print(self.find_path)
             p1 = self.find_path[0]
             p2 = self.find_path[1]
@@ -1224,7 +1230,7 @@ class CameraClass:
         self.rightCam.enable(timeStep)
         self.colorSensor.enable(timeStep)
         self.victim_positions = []
-        model_path = '/Users/parsafallah/Downloads/Ferdowsi-Erebus-master/'
+        model_path = 'D:\\Ferdowsi-Erebus\\'
         self.model: tf.keras.models.Model = self.get_all_model()
         self.model.load_weights(f"{model_path}model.h5")
         self.hsu_type = ['H', 'S', 'U']
