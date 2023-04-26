@@ -955,7 +955,7 @@ class AIPlannerClass:
         if self.initial_time == -1:
             self.ai_state = AIStates.random_searching
             return
-        if self.remained_time / self.initial_time > .1:
+        if self.remained_time / self.initial_time > .2:
             self.ai_state = AIStates.random_searching
         # elif self.remained_time / self.initial_time > .3:
         #     self.ai_state = AIStates.wall_following
@@ -1102,7 +1102,7 @@ class AIPlannerClass:
                 if best_path is not None:
                     if len(best_path) >= 2:
                         # `test`
-                        np.savetxt("D:\\ali.csv", baby_location.map, delimiter=",", fmt='%s')
+                        # np.savetxt("D:\\ali.csv", baby_location.map, delimiter=",", fmt='%s')
                         self.ai_state = AIStates.not_seen_searching
                         baby_planner.start_not_seen_searching = True
                         baby_location.blockChanged = True
