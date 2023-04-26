@@ -486,7 +486,7 @@ class RobotControlClass:
     def __init__(self, robot: Robot):
         self.full_turn_angle = 4.42
         self.state = MoveState.turnToRightDirection
-        self.max_velocity = 5.20
+        self.max_velocity = 6.1
         self.last_state = MoveState.forward
         self.turn_state = TurnState.not_started
         self.left_wheel = robot.getDevice("wheel1 motor")
@@ -797,7 +797,13 @@ class StatusClass:
         else:
             self.front_status = AroundStatus.is_wall
 
-        if self.s1.getValue() > .4 and self.s5.getValue() < wall_dist and self.s6.getValue() < wall_dist:
+        if self.s1.getValue() > .3 and self.s5.getValue() < wall_dist and self.s6.getValue() < wall_dist:
+            self.front_status = AroundStatus.is_wall
+
+        if self.s1.getValue() > .3 and self.s5.getValue() > .3 and self.s6.getValue() < wall_dist:
+            self.front_status = AroundStatus.is_wall
+
+        if self.s1.getValue() > .3 and self.s6.getValue() > .3 and self.s5.getValue() < wall_dist:
             self.front_status = AroundStatus.is_wall
 
         if self.s2.getValue() > wall_dist + .02:
