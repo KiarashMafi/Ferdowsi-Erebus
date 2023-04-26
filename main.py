@@ -250,11 +250,10 @@ class LocationClass:
         elif self.direction == Direction.left:
             if baby_controller.state == MoveState.turnLeft:
                 self.direction = Direction.down
-            elif baby_controller == MoveState.turnRight:
+            elif baby_controller.state == MoveState.turnRight:
                 self.direction = Direction.up
             elif baby_controller.state == MoveState.turnBack:
                 self.direction = Direction.right
-
 
         elif self.direction == Direction.right:
             if baby_controller.state == MoveState.turnLeft:
@@ -264,7 +263,6 @@ class LocationClass:
             elif baby_controller.state == MoveState.turnBack:
                 self.direction = Direction.left
 
-
         elif self.direction == Direction.down:
             if baby_controller.state == MoveState.turnLeft:
                 self.direction = Direction.right
@@ -272,31 +270,39 @@ class LocationClass:
                 self.direction = Direction.left
             elif baby_controller.state == MoveState.turnBack:
                 self.direction = Direction.up
-        print(f"updating {baby_controller.state},{self.direction} ")
 
     def set_tile_pos(self):
         self.map[2 * self.tilePosX + 1][2 * self.tilePosY + 1] = 1
         if baby_cam.get_color() == GameColors.black:
             if self.direction != Direction.not_initialized:
                 self.map[2 * self.light_x_tile + 1][2 * self.light_y_tile + 1] = 2
-        if baby_location.robot_in_tile_center() and baby_location.direction != Direction.not_initialized and \
-                baby_controller.state == MoveState.forward:
-
+        # if baby_location.robot_in_tile_center() and baby_location.direction != Direction.not_initialized and \
+        #         baby_controller.state == MoveState.forward: :check
+        if baby_location.direction != Direction.not_initialized and \
+                baby_controller.state == MoveState.forward and baby_location.robot_in_tile_center():
+            # print("inja miad #############################")
+            print(self.tilePosX, self.tilePosY)
+            # print("left",baby_status.s4.getValue())
+            # print("right",baby_status.s2.getValue())
             if baby_status.front_status == AroundStatus.is_wall:
+                # print("set front .........................")
                 front_tile_x, front_tile_y = self.NextPosForward
                 self.map[front_tile_x + self.tilePosX + 1][front_tile_y + self.tilePosY + 1] = 2
 
             if baby_status.right_status == AroundStatus.is_wall:
                 right_tile_x, right_tile_y = self.NextPosRight
                 self.map[right_tile_x + self.tilePosX + 1][right_tile_y + self.tilePosY + 1] = 2
+                # print("set right .........................")
 
             if baby_status.left_status == AroundStatus.is_wall:
                 left_tile_x, left_tile_y = self.NextPosLeft
                 self.map[left_tile_x + self.tilePosX + 1][left_tile_y + self.tilePosY + 1] = 2
+                # print(f"set left {left_tile_x, left_tile_y}.........................")
 
             if baby_status.behind_status == AroundStatus.is_wall:
                 behind_tile_x, behind_tile_y = self.NextPosBackward
                 self.map[behind_tile_x + self.tilePosX + 1][behind_tile_y + self.tilePosY + 1] = 2
+                print("set back .........................")
 
     def init_parameters(self):
         pos = self.gps.getValues()
@@ -314,7 +320,11 @@ class LocationClass:
         self.last_tile = (self.tilePosX, self.tilePosY)
         self.tilePosX = int((self.x - self.offsetX + 0.06) // 0.12 + self.MAP_SIZE // 2)
         self.tilePosY = int((self.y - self.offsetY + 0.06) // 0.12 + self.MAP_SIZE // 2)
-        self.set_tile_pos()
+        self.NextPosForward = self.get_next_pos_forward()
+        self.NextPosBackward = self.get_next_pos_backward()
+        self.NextPosLeft = self.get_next_pos_left()
+        self.NextPosRight = self.get_next_pos_right()
+        self.get_sub_area()
         if baby_controller.state == MoveState.forward:
             self.add_point()
             if len(self.history) > 6:
@@ -324,11 +334,7 @@ class LocationClass:
         self.light_y_tile = int((self.lightY - self.offsetY + 0.06) // 0.12 + self.MAP_SIZE // 2)
         self.isStuck = self.is_stuck()
         self.increasing_stuck_counter()
-        self.NextPosForward = self.get_next_pos_forward()
-        self.NextPosBackward = self.get_next_pos_backward()
-        self.NextPosLeft = self.get_next_pos_left()
-        self.NextPosRight = self.get_next_pos_right()
-        self.get_sub_area()
+        self.set_tile_pos()
 
         if self.last_tile != (self.tilePosX, self.tilePosY):
             self.blockChanged = True
@@ -436,8 +442,23 @@ class LocationClass:
             return False
         return self.map[2 * pos[0] + 1][2 * pos[1] + 1] == 2
 
+    def robot_in_big_tile_center(self):
+        thr = .02
+        condition_area1 = (0.06 - thr <= (self.y - self.offsetY + 0.06) % 0.12 < .06 + thr and self.direction in [
+            Direction.up, Direction.down]) or \
+                          (.06 - thr <= (self.x - self.offsetX + 0.06) % 0.12 < .06 + thr and self.direction in [
+                              Direction.left, Direction.right])
+
+        condition_area2 = (0.025 <= (self.y - self.offsetY + 0.03) % 0.06 < 0.035 and self.direction in [
+            Direction.up, Direction.down]) or \
+                          (0.025 <= (self.x - self.offsetX + 0.03) % 0.06 < 0.035 and self.direction in [
+                              Direction.left, Direction.right])
+
+        # if baby_planner.area_number == 1:
+        return condition_area1
+
     def robot_in_tile_center(self):
-        thr = .004
+        thr = .008
         condition_area1 = (0.06 - thr <= (self.y - self.offsetY + 0.06) % 0.12 < .06 + thr and self.direction in [
             Direction.up, Direction.down]) or \
                           (.06 - thr <= (self.x - self.offsetX + 0.06) % 0.12 < .06 + thr and self.direction in [
@@ -464,7 +485,7 @@ class LocationClass:
 class RobotControlClass:
     def __init__(self, robot: Robot):
         self.full_turn_angle = 4.42
-        self.state = MoveState.forward
+        self.state = MoveState.turnToRightDirection
         self.max_velocity = 5.20
         self.last_state = MoveState.forward
         self.turn_state = TurnState.not_started
@@ -533,30 +554,31 @@ class RobotControlClass:
         elif baby_location.direction == Direction.down:
             e = self.get_down_error(4)
 
-        dist = .06
+        dist = .055
         e_near_wall = 0
         if baby_status.s2.getValue() < baby_status.s4.getValue():
-            if baby_status.s2.getValue() < 1.5 * dist:
+            # print(f"left: {baby_status.s2.getValue()}")
+            if baby_status.s2.getValue() < 1.8 * dist:
                 self.right_wall_counter += 1
                 e_near_wall = (baby_status.s2.getValue() - dist)
                 if e_near_wall < 0:  # too near to wall
-                    e_near_wall *= .5
+                    e_near_wall *= 25
                 else:
-                    e_near_wall *= 2.5
+                    e_near_wall *= 45
             else:
                 self.right_wall_counter = 0
         else:
-            if baby_status.s4.getValue() < 1.5 * dist:
+            if baby_status.s4.getValue() < 1.8 * dist:
+                # print(f"right: {baby_status.s4.getValue()}")
                 self.left_wall_counter += 1
                 e_near_wall = - (baby_status.s4.getValue() - dist)
                 if e_near_wall < 0:  # too near to wall
-                    e_near_wall *= .5
+                    e_near_wall *= 25
                 else:
-                    e_near_wall *= 2.5
+                    e_near_wall *= 45
             else:
                 self.left_wall_counter = 0
-
-        if self.left_wall_counter < 15 and self.right_wall_counter < 15:
+        if self.left_wall_counter < 10 and self.right_wall_counter < 10:
             e_near_wall = 0
         if baby_controller.forward_counter < 10:
             e = 0
@@ -572,9 +594,12 @@ class RobotControlClass:
                 self.state = MoveState.turnToDownDirection
             return
 
+        # print(e_near_wall)
+
         # e = 0
-        print(f"e: {e}, dir: {baby_location.direction}  , {self.iu.getRollPitchYaw()[2]} ")
-        e_near_wall = 0
+        # e_near_wall = 0
+
+        # print(f"e: {e}, dir: {baby_location.direction}  , {self.iu.getRollPitchYaw()[2]} ")
         self.leftWheelSpeed = self.max_velocity - e - e_near_wall
         self.rightWheelSpeed = self.max_velocity + e + e_near_wall
         self.normalize_wheel_speed()
@@ -590,14 +615,13 @@ class RobotControlClass:
         else:
             target = self.leftWheelPos + self.full_turn_angle / 2
             pid_coef = target - self.leftWheelPosSensor.getValue()
-            self.leftWheelSpeed = max_min(pid_coef * 5, 2)
-            self.rightWheelSpeed = - max_min(pid_coef * 5, 2)
+            self.leftWheelSpeed = max_min(pid_coef * 5, 1.5)
+            self.rightWheelSpeed = - max_min(pid_coef * 5, 1.5)
             self.normalize_wheel_speed()
             self.left_wheel.setVelocity(self.leftWheelSpeed)
             self.right_wheel.setVelocity(self.rightWheelSpeed)
             if target - .01 < self.leftWheelPosSensor.getValue() < target + .01:
                 self.turn_state = TurnState.not_started
-                baby_location.update_direction = False
                 self.state = MoveState.forward
 
     def turn_right(self):
@@ -609,14 +633,13 @@ class RobotControlClass:
         else:
             target = self.leftWheelPos - self.full_turn_angle / 2
             pid_coef = target - self.leftWheelPosSensor.getValue()
-            self.leftWheelSpeed = max_min(pid_coef * 5, 2)
-            self.rightWheelSpeed = - max_min(pid_coef * 5, 2)
+            self.leftWheelSpeed = max_min(pid_coef * 5, 1.5)
+            self.rightWheelSpeed = - max_min(pid_coef * 5, 1.5)
             self.normalize_wheel_speed()
             self.left_wheel.setVelocity(self.leftWheelSpeed)
             self.right_wheel.setVelocity(self.rightWheelSpeed)
             if target - .01 < self.leftWheelPosSensor.getValue() < target + .01:
                 self.turn_state = TurnState.not_started
-                baby_location.update_direction = False
                 self.state = MoveState.forward
 
     def turn_back(self):
@@ -628,14 +651,13 @@ class RobotControlClass:
         else:
             target = self.leftWheelPos + self.full_turn_angle
             pid_coef = target - self.leftWheelPosSensor.getValue()
-            self.leftWheelSpeed = max_min(pid_coef * 5, 2)
-            self.rightWheelSpeed = - max_min(pid_coef * 5, 2)
+            self.leftWheelSpeed = max_min(pid_coef * 4, 1.5)
+            self.rightWheelSpeed = - max_min(pid_coef * 4, 1.5)
             self.normalize_wheel_speed()
             self.left_wheel.setVelocity(self.leftWheelSpeed)
             self.right_wheel.setVelocity(self.rightWheelSpeed)
             if target - .01 < self.leftWheelPosSensor.getValue() < target + .01:
                 self.turn_state = TurnState.not_started
-                baby_location.update_direction = False
                 self.state = MoveState.forward
 
     def move_back(self):
@@ -764,7 +786,7 @@ class StatusClass:
         self.s6.enable(timeStep)
 
     def update_status(self):
-        wall_dist = .12
+        wall_dist = .09
         if self.s1.getValue() > wall_dist:
             if baby_location.is_tile_seen(baby_location.NextPosForward):
                 self.front_status = AroundStatus.is_seen
@@ -778,7 +800,7 @@ class StatusClass:
         if self.s1.getValue() > .4 and self.s5.getValue() < wall_dist and self.s6.getValue() < wall_dist:
             self.front_status = AroundStatus.is_wall
 
-        if self.s2.getValue() > wall_dist:
+        if self.s2.getValue() > wall_dist + .02:
             if baby_location.is_tile_seen(baby_location.NextPosRight):
                 self.right_status = AroundStatus.is_seen
             elif baby_location.is_tile_black(baby_location.NextPosRight):
@@ -788,7 +810,7 @@ class StatusClass:
         else:
             self.right_status = AroundStatus.is_wall
 
-        if self.s4.getValue() > wall_dist:
+        if self.s4.getValue() > wall_dist + .02:
             if baby_location.is_tile_seen(baby_location.NextPosLeft):
                 self.left_status = AroundStatus.is_seen
             elif baby_location.is_tile_black(baby_location.NextPosLeft):
@@ -849,8 +871,8 @@ class ReturnPath:
             self.get_path(x - 1, y)
             self.list_hazfi.remove((x, y))
 
-        if 2 * x + 3 < self.map_size and baby_location.map[2 * x + 1 + 2][2 * y + 1] == 1 or (
-                x + 1 == self.startx and y == self.starty) and \
+        if 2 * x + 3 < self.map_size and (baby_location.map[2 * x + 1 + 2][2 * y + 1] == 1 or (
+                x + 1 == self.startx and y == self.starty)) and \
                 (x + 1, y) not in self.list_hazfi and \
                 baby_location.map[2 * x + 1 + 1][2 * y + 1] != 2:
             self.list_hazfi.append((x, y))
@@ -921,24 +943,29 @@ class AIPlannerClass:
             # print(f"area detected, {self.area_number}")
 
     def choose_state(self):
-        print(self.remained_time / self.initial_time)
+        # print(self.remained_time / self.initial_time)
         if self.ai_state == AIStates.not_seen_searching:
             return
         if self.initial_time == -1:
             self.ai_state = AIStates.random_searching
             return
-        if self.remained_time / self.initial_time > .88:
+        if self.remained_time / self.initial_time > .1:
             self.ai_state = AIStates.random_searching
         # elif self.remained_time / self.initial_time > .3:
         #     self.ai_state = AIStates.wall_following
         else:
             self.ai_state = AIStates.returning
+            baby_controller.state = MoveState.stop
+            baby_controller.run()
+            baby_robot.step(timeStep)
+            self.find_path = baby_finder.get_best_path(baby_location.tilePosX, baby_location.tilePosY)
+            self.start_not_seen_searching = False
         # baby_controller.state = MoveState.forward
 
     def plan(self):
         self.update_game_time_score()
-        baby_location.update_parameters()
         baby_status.update_status()
+        baby_location.update_parameters()
         baby_cam.check_victim()
         baby_map_bonus.update_map()
         self.area_detect()
@@ -951,6 +978,7 @@ class AIPlannerClass:
             elif self.ai_state == AIStates.returning:
                 self.return_start_tile()
             elif self.ai_state == AIStates.not_seen_searching:
+                # print(baby_location.stuckCounter)
                 self.go_to_not_seen_tile()
         # baby_controller.dont_move()
         # print(f"current is {baby_location.tilePosX, baby_location.tilePosY}")
@@ -984,10 +1012,11 @@ class AIPlannerClass:
 
             return
 
-        if baby_status.front_status == AroundStatus.is_wall or (
+        if baby_status.s1.getValue() <= .065 or (
                 baby_location.robot_in_tile_center() and baby_location.blockChanged and
                 baby_cam.get_color() != GameColors.blue and baby_cam.get_color() != GameColors.purple and
-                baby_cam.get_color() != GameColors.red and baby_cam.get_color() != GameColors.green) \
+                baby_cam.get_color() != GameColors.red and baby_cam.get_color() != GameColors.green and \
+                baby_status.front_status != AroundStatus.is_wall) \
                 or baby_cam.get_color() == GameColors.black:
             # print(
             # f"color: {baby_cam.get_color()} is center: {baby_location.robot_in_tile_center()} bloc changed:{baby_location.blockChanged}")
@@ -1032,7 +1061,7 @@ class AIPlannerClass:
                 else:
                     baby_controller.state = random.choice(emptyChoice)
 
-                print(f"Random search robot choose from emptyChoices: {baby_controller.state}")
+                # print(f"Random search robot choose from emptyChoices: {baby_controller.state}")
                 if len(emptyChoice) > 1:
                     emptyChoice.remove(baby_controller.state)
                     for choice in emptyChoice:
@@ -1048,26 +1077,40 @@ class AIPlannerClass:
                         elif choice == MoveState.turnBack:
                             # print("is back")
                             self.not_seen_tiles.add(tuple(baby_location.NextPosBackward))
-            # elif len(self.not_seen_tiles) > 0:
-            #
-            #     while len(self.not_seen_tiles) > 0:
-            #         target_tile = self.not_seen_tiles.pop()
-            #         baby_search_finder = ReturnPath(*target_tile)
-            #         return_path = baby_search_finder.get_best_path(baby_location.tilePosX, baby_location.tilePosY)
-            #         if len(return_path) >= 2:
-            #             self.ai_state = AIStates.not_seen_searching
-            #             baby_planner.start_not_seen_searching = True
-            #             print(return_path)
-            #             print("go to not seen section")
-            #             self.find_path = return_path
-            #             return
-            #
-            #     if len(allChoice) > 0:
-            #         baby_controller.state = random.choice(allChoice)
-            #         print(f"Random search robot choose from allChoice: {baby_controller.state}")
-            #     else:
-            #         print("Bug go to forward")
-            #         baby_controller.state = MoveState.forward
+
+
+            elif len(self.not_seen_tiles) > 0 and self.area_number in [1, 2]:
+                best_path = None
+                for i in range(len(self.not_seen_tiles)):
+                    baby_controller.state = MoveState.stop
+                    baby_controller.run()
+                    baby_robot.step(timeStep)
+                    target_tile = list(self.not_seen_tiles)[i]
+                    baby_search_finder = ReturnPath(*target_tile)
+                    return_path = baby_search_finder.get_best_path(baby_location.tilePosX, baby_location.tilePosY)
+                    if len(return_path) >= 2 and best_path is None:
+                        best_path = return_path
+                    if best_path is not None:
+                        if len(best_path) > len(return_path) >= 2:
+                            best_path = return_path
+                if best_path is not None:
+                    if len(best_path) >= 2:
+                        # `test`
+                        np.savetxt("D:\\ali.csv", baby_location.map, delimiter=",", fmt='%s')
+                        self.ai_state = AIStates.not_seen_searching
+                        baby_planner.start_not_seen_searching = True
+                        baby_location.blockChanged = True
+                        # print(best_path)
+                        # print("go to not seen section")
+                        self.find_path = best_path
+                        return
+
+                if len(allChoice) > 0:
+                    baby_controller.state = random.choice(allChoice)
+                    print(f"Random search robot choose from allChoice: {baby_controller.state}")
+                else:
+                    print("Bug go to forward")
+                    baby_controller.state = MoveState.forward
             elif len(allChoice) > 0:
                 baby_controller.state = random.choice(allChoice)
                 print(f"Random search robot choose from allChoice: {baby_controller.state}")
@@ -1080,70 +1123,11 @@ class AIPlannerClass:
         pass
 
     def return_start_tile(self):
-
-        if (baby_location.robot_in_tile_center() and baby_location.blockChanged) or \
-                baby_controller.state == MoveState.stop:
-
-            baby_location.blockChanged = False
-
-            best_path = baby_finder.get_best_path(baby_location.tilePosX, baby_location.tilePosY)
-            # print(best_path)
-            if baby_location.tilePosX == baby_location.startingTilePos[0] and baby_location.tilePosY == \
-                    baby_location.startingTilePos[1] and baby_location.robot_in_tile_center():
-                # print("send finish")
-                self.send_finish()
-                return
-
-            if len(
-                    best_path) == 0 or baby_status.front_status == AroundStatus.is_wall or baby_location.direction == Direction.not_initialized:
-                self.random_search()
-                return
-
-            p1 = best_path[0]
-            p2 = best_path[1]
-            dx = p2[0] - p1[0]
-            dy = p2[1] - p1[1]
-
-            if baby_location.direction == Direction.up:
-                if dx == 1:
-                    baby_controller.state = MoveState.turnRight
-                if dx == -1:
-                    baby_controller.state = MoveState.turnLeft
-                if dy == 1:
-                    baby_controller.state = MoveState.turnBack
-                if dy == -1:
-                    baby_controller.state = MoveState.forward
-
-            if baby_location.direction == Direction.down:
-                if dx == 1:
-                    baby_controller.state = MoveState.turnLeft
-                if dx == -1:
-                    baby_controller.state = MoveState.turnRight
-                if dy == 1:
-                    baby_controller.state = MoveState.forward
-                if dy == -1:
-                    baby_controller.state = MoveState.turnBack
-
-            if baby_location.direction == Direction.left:
-                if dx == 1:
-                    baby_controller.state = MoveState.turnBack
-                if dx == -1:
-                    baby_controller.state = MoveState.forward
-                if dy == 1:
-                    baby_controller.state = MoveState.turnLeft
-                if dy == -1:
-                    baby_controller.state = MoveState.turnRight
-
-            if baby_location.direction == Direction.right:
-                if dx == 1:
-                    baby_controller.state = MoveState.forward
-                if dx == -1:
-                    baby_controller.state = MoveState.turnBack
-                if dy == 1:
-                    baby_controller.state = MoveState.turnRight
-                if dy == -1:
-                    baby_controller.state = MoveState.turnLeft
-            baby_location.update_direction_turning()
+        print(f"returning: {self.find_path}")
+        self.go_to_not_seen_tile()
+        if baby_location.tilePosX == baby_location.startingTilePos[0] and baby_location.tilePosY == \
+                baby_location.startingTilePos[1]:
+            self.send_finish()
 
     def send_victim(self, typ):
         x, y = baby_location.x * 100, baby_location.y * 100
@@ -1154,7 +1138,7 @@ class AIPlannerClass:
     def send_finish(self):
 
         main_array = np.flipud(np.array(baby_map_bonus.map))
-        np.savetxt("D:\\ali.csv", main_array, delimiter=",", fmt='%s')
+        # np.savetxt("D:\\ali.csv", main_array, delimiter=",", fmt='%s')
         self.send_map_array(main_array)
         exit_mes = struct.pack('c', b'E')
         self.emitter.send(exit_mes)
@@ -1189,8 +1173,9 @@ class AIPlannerClass:
     def go_to_not_seen_tile(self):
         if baby_location.tilePosX == baby_search_finder.startx and baby_location.tilePosY == baby_search_finder.starty:
             self.ai_state = AIStates.random_searching
-        if len(self.find_path) < 2 or \
-                (baby_cam.get_color() == GameColors.black and baby_controller.state == MoveState.forward):
+            return
+
+        if len(self.find_path) < 2:
             self.ai_state = AIStates.random_searching
             return
 
@@ -1198,14 +1183,14 @@ class AIPlannerClass:
             baby_location.direction != Direction.not_initialized) or self.start_not_seen_searching:
             baby_location.blockChanged = False
             self.start_not_seen_searching = False
-            self.find_path = baby_search_finder.get_best_path(baby_location.tilePosX, baby_location.tilePosY)
-            print(self.find_path)
+            # self.find_path = baby_search_finder.get_best_path(baby_location.tilePosX, baby_location.tilePosY)
+            # print(self.find_path)
             p1 = self.find_path[0]
             p2 = self.find_path[1]
             dx = p2[0] - p1[0]
             dy = p2[1] - p1[1]
-            print(
-                f"direction is: {baby_location.direction},target is :{baby_search_finder.startx, baby_search_finder.starty},best_path:{self.find_path}")
+            # print(
+            #     f"direction is: {baby_location.direction},target is :{baby_search_finder.startx, baby_search_finder.starty},best_path:{self.find_path}")
             if dx == 1:
                 baby_controller.state = MoveState.turnToRightDirection
             elif dx == -1:
@@ -1215,10 +1200,21 @@ class AIPlannerClass:
             elif dy == -1:
                 baby_controller.state = MoveState.turnToUpDirection
             else:
-                print("wrong path")
+                # print("wrong path")
                 self.ai_state = AIStates.random_searching
                 baby_controller.state = MoveState.forward
                 return
+            if len(self.find_path) > 0:
+                del self.find_path[0]
+
+            if (
+                    baby_cam.get_color() == GameColors.black and baby_controller.state == MoveState.forward) or \
+                    baby_location.stuckCounter > 40 or (
+                    baby_status.s1.getValue() < .75 and baby_controller.state == MoveState.forward):
+                self.ai_state = AIStates.random_searching
+                if self.find_path[-1] in self.not_seen_tiles:
+                    # print("delete old path")
+                    self.not_seen_tiles.remove(self.find_path[-1])
 
 
 class CameraClass:
@@ -1275,6 +1271,7 @@ class CameraClass:
     def check_type(self, data):
         wall_per = 0
         sky = 0
+        obs = 0
         for i in range(len(data)):
             color = data[i][0][0]
             value = data[i][0][2]
@@ -1284,8 +1281,10 @@ class CameraClass:
                 wall_per += per
             if 105 <= color <= 125:
                 sky += per
+            if 0 <= color <= 20 and (75 <= value <= 150 or 0 <= value <= 35):  # khakestari va black
+                obs += per
         # print(wall_per, sky)
-        if wall_per >= .7 or sky >= .05:
+        if (wall_per >= .66) or (sky >= .05) or (obs >= 0.45):
             return VictimTypes.wall
 
         return VictimTypes.sign_or_victim
@@ -1328,7 +1327,7 @@ class CameraClass:
         # img2 = np.array([np.resize(img2, (224, 224, 3))])
         img1 = np.array([tf.keras.preprocessing.image.smart_resize(img1, (224, 224), interpolation='bilinear')])
         img2 = np.array([tf.keras.preprocessing.image.smart_resize(img2, (224, 224), interpolation='bilinear')])
-        if type_left != VictimTypes.wall and baby_status.s4.getValue() < 0.12:
+        if type_left != VictimTypes.wall and baby_status.s4.getValue() < 0.15:
             # inja bayad s4 bashe
             if baby_controller.stopCounter == 0:
                 baby_controller.dont_move()
@@ -1341,7 +1340,7 @@ class CameraClass:
                 self.victim_positions.append((baby_location.tilePosX, baby_location.tilePosY))
                 baby_map_bonus.update_victim(vtype, Direction.left)
 
-        if type_right != VictimTypes.wall and baby_status.s2.getValue() < 0.12:
+        if type_right != VictimTypes.wall and baby_status.s2.getValue() < 0.15:
             # inja bayad s2 bashe
             if baby_controller.stopCounter == 0:
                 baby_controller.dont_move()
@@ -1379,7 +1378,7 @@ class CameraClass:
         return model
 
 
-timeStep = 32
+timeStep = 16
 # define Robot
 baby_robot = Robot()
 baby_location = LocationClass(baby_robot)
@@ -1397,9 +1396,9 @@ baby_finder = ReturnPath(*baby_location.startingTilePos)
 baby_search_finder = ReturnPath(0, 0)
 
 while baby_robot.step(timeStep) != -1:
-    # try:
-    #     print(baby_controller.state)
-    baby_planner.plan()
+    try:
+        #     print(baby_controller.state)
+        baby_planner.plan()
 
     # print(
     #     f"Forward status : {baby_status.front_status}, "
@@ -1411,6 +1410,6 @@ while baby_robot.step(timeStep) != -1:
     #     f"robot state : {baby_controller.state}\n")
     # print(baby_location.robot_in_tile_center())
 
-# except:
-#     pass
+    except:
+        pass
 # print(baby_controller.state)

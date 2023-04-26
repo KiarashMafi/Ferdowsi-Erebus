@@ -8,14 +8,14 @@ from tensorflow.python.keras.saving.save import load_model
 
 preprocess_input = tf.keras.applications.mobilenet_v3.preprocess_input
 generator = tf.keras.preprocessing.image.ImageDataGenerator(
-    zoom_range=0.3,
+    # zoom_range=0.3,
     vertical_flip=True,
     horizontal_flip=True,
-    width_shift_range=0.2,
-    height_shift_range=0.2,
+    width_shift_range=0.1,
+    height_shift_range=0.1,
     preprocessing_function= preprocess_input
 ).flow_from_directory(
-    directory='train',
+    directory='train2',
     target_size=(224, 224),  # resize to this size
     color_mode="rgb",
     class_mode="categorical",
