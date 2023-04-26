@@ -237,6 +237,8 @@ class LocationClass:
         self.areaBlockChanged = False
         self.passedBlocksCounter = 0
         self.repeatedBlocksCounter = 0
+        self.left_wall_changed = []
+        self.right_wall_changed = []
 
     def update_direction_turning(self):
         if self.direction == Direction.up:
@@ -281,7 +283,7 @@ class LocationClass:
         if baby_location.direction != Direction.not_initialized and \
                 baby_controller.state == MoveState.forward and baby_location.robot_in_tile_center():
             # print("inja miad #############################")
-            print(self.tilePosX, self.tilePosY)
+            # print(self.tilePosX, self.tilePosY)
             # print("left",baby_status.s4.getValue())
             # print("right",baby_status.s2.getValue())
             if baby_status.front_status == AroundStatus.is_wall:
@@ -302,7 +304,7 @@ class LocationClass:
             if baby_status.behind_status == AroundStatus.is_wall:
                 behind_tile_x, behind_tile_y = self.NextPosBackward
                 self.map[behind_tile_x + self.tilePosX + 1][behind_tile_y + self.tilePosY + 1] = 2
-                print("set back .........................")
+                # print("set back .........................")
 
     def init_parameters(self):
         pos = self.gps.getValues()
@@ -335,10 +337,14 @@ class LocationClass:
         self.isStuck = self.is_stuck()
         self.increasing_stuck_counter()
         self.set_tile_pos()
+        self.left_wall_changed.append(baby_status.left_status)
+        self.right_wall_changed.append(baby_status.right_status)
 
         if self.last_tile != (self.tilePosX, self.tilePosY):
             self.blockChanged = True
             self.areaBlockChanged = True
+            self.left_wall_changed.clear()
+            self.right_wall_changed.clear()
             self.passedBlocksCounter += 1
         # set_game_map(self.lightXPos, self.lightXPos, colorControl.get_color())
 
@@ -544,6 +550,7 @@ class RobotControlClass:
         self.stopFlag = False
 
     def move_forward(self):
+
         e = 0
         if baby_location.direction == Direction.left:
             e = self.get_left_error(4)
@@ -986,6 +993,10 @@ class AIPlannerClass:
             elif self.ai_state == AIStates.not_seen_searching:
                 # print(baby_location.stuckCounter)
                 self.go_to_not_seen_tile()
+
+        print("can go between",
+            baby_location.right_wall_changed.count(AroundStatus.is_wall) > 3 and baby_location.right_wall_changed.count(
+                AroundStatus.is_empty) > 3)
         # baby_controller.dont_move()
         # print(f"current is {baby_location.tilePosX, baby_location.tilePosY}")
 
