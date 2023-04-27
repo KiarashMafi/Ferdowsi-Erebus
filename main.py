@@ -535,10 +535,10 @@ class RobotControlClass:
         self.stopFlag = False
 
     def move_forward(self):
-        if baby_status.s6.getValue() < .1 and baby_status.s5.getValue() > .3:
+        if baby_status.s6.getValue() < .1 and baby_status.s5.getValue() > .25 :
             baby_controller.state = MoveState.turnLeft
             return
-        if baby_status.s5.getValue() < .1 and baby_status.s6.getValue() > .3:
+        if baby_status.s5.getValue() < .1 and baby_status.s6.getValue() > .25:
             baby_controller.state = MoveState.turnRight
             return
 
@@ -578,10 +578,10 @@ class RobotControlClass:
                 self.left_wall_counter = 0
         if self.left_wall_counter < 10 and self.right_wall_counter < 10:
             e_near_wall = 0
-        if baby_controller.forward_counter < 10:
+        if baby_controller.forward_counter < 10 *  32 / timeStep:
             e = 0
         elif abs(e) > .3 * 4 and baby_status.front_status != AroundStatus.is_wall \
-                and baby_cam.get_color() != GameColors.black and baby_controller.forward_counter > 40:
+                and baby_cam.get_color() != GameColors.black and baby_controller.forward_counter > 40 * 32 / timeStep:
             if baby_location.direction == Direction.left:
                 self.state = MoveState.turnToLeftDirection
             if baby_location.direction == Direction.right:
@@ -665,10 +665,10 @@ class RobotControlClass:
         baby_location.history.clear()
         self.stopCounter += 1
 
-        if self.stopCounter >= 100 - 10:
+        if self.stopCounter >= (100 - 10) * 32 / timeStep:
             self.stopFlag = True
 
-        if self.stopCounter >= 100:
+        if self.stopCounter >= 100 * 32 / timeStep:
             self.stopCounter = 0
             self.state = self.last_state
 
@@ -1000,13 +1000,14 @@ class AIPlannerClass:
 
         if baby_location.stuckCounter > 30:
             # print("is stuck")
-            if baby_status.s3.getValue() < 0.2 or baby_status.s5.getValue() < 0.2:
+            ## side
+            if baby_status.s3.getValue() < 0.2 or baby_status.s5.getValue() < 0.2 and baby_controller.forward_counter > 40 * 32 / timeStep:
                 baby_controller.state = MoveState.turnRight
 
-            elif baby_status.s1.getValue() < 0.2 or baby_status.s6.getValue() < 0.2:
+            elif baby_status.s1.getValue() < 0.2 or baby_status.s6.getValue() < 0.2 and baby_controller.forward_counter > 40 * 32 / timeStep:
                 baby_controller.state = MoveState.turnLeft
 
-            elif baby_status.s2.getValue() < 0.2 and baby_status.s4.getValue() < 0.2:
+            elif baby_status.s2.getValue() < 0.1 and baby_status.s4.getValue() < 0.1:
                 baby_controller.state = MoveState.turnBack
             baby_location.update_direction_turning()
 
@@ -1314,15 +1315,11 @@ class CameraClass:
         return data
 
     def check_victim(self):
-        t1 = time()
         img1, img2 = self.capture()
-        t2 = time()
         if (baby_location.tilePosX, baby_location.tilePosY) in self.victim_positions:
             return
-        t3 = time()
         data_left = self.get_color_data(img1)
         data_right = self.get_color_data(img2)
-        t4 = time()
         if baby_status.s4.getValue() < 0.15:
             type_left = self.check_type(data_left)
             if type_left != VictimTypes.wall:
@@ -1354,8 +1351,6 @@ class CameraClass:
                     baby_planner.send_victim(vtype)
                     self.victim_positions.append((baby_location.tilePosX, baby_location.tilePosY))
                     baby_map_bonus.update_victim(vtype, Direction.right)
-        t5 = time()
-        print(t2 - t1, t3 - t2, t4 - t3, t5 - t4)
 
     def get_all_model(self):
         IMG_SIZE = (224, 224)
